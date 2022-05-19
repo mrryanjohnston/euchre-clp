@@ -363,12 +363,23 @@
 		(last-dealt ?gid ?np)
 		(unshuffled-deck ?gid (delete$ ?cards ?i ?ii))))
 
-(defrule announce-card-in-hand
+(defrule tell-own-card-in-hand
+	(connection (sid ?sid) (wsid ?wsid))
 	(game (id ?gid))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(player (game ?gid) (seat ?s) (sid ?sid))
 	(card-in-hand (game ?gid) (seat ?s) (name ?name) (suit ?suit))
 	=>
-	(broadcast-to-other-players ?gid ?s (format nil "cardinhand %d" ?s))
-	(send-directly-to-player ?gid ?s (format nil "cardinhand %d %s %s" ?s (sym-cat ?name) ?suit)))
+	(format ?wsid "cardinhand %d %s %s" ?s (sym-cat ?name) ?suit))
+
+(defrule tell-other-card-in-hand
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(player (game ?gid) (seat ?s) (sid ?sid))
+	(card-in-hand (game ?gid) (seat ?ss&~?s))
+	=>
+	(format ?wsid "cardinhand %d" ?ss))
 
 (defrule done-dealing
 	(game (id ?gid))
@@ -396,16 +407,15 @@
 		(kitty ?gid ?kitty (nth$ ?i ?cards) (nth$ ?ii ?cards))))
 
 (defrule announce-kitty
-        (player-to-the-left-of ?d ?p)
 	(game (id ?gid))
-	(dealer ?gid ?d)
+	(game-connection (game ?gid) (wsid ?wsid))
 	(unshuffled-deck ?gid)
 	?k <- (kitty ?gid $? ?name ?suit)
 	=>
-	(broadcast ?gid kitty)
-	(broadcast ?gid kitty)
-	(broadcast ?gid kitty)
-	(broadcast ?gid (format nil "kitty %s %s" ?name ?suit)))
+	(printout ?wsid kitty)
+	(printout ?wsid kitty)
+	(printout ?wsid kitty)
+	(format ?wsid "kitty %s %s" (sym-cat ?name) ?suit))
 
 (defrule pick-it-up-or-pass
 	?b <- (bidder ?id ?p&:(< ?p 5))
