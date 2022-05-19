@@ -1,3 +1,15 @@
+(deftemplate card-in-hand
+	(slot game)
+	(slot seat)
+	(slot name)
+	(slot suit)
+	(slot choice (default 0)))
+(deftemplate card-in-play
+	(slot game)
+	(slot seat)
+	(slot name)
+	(slot suit)
+	(slot choice (default 0)))
 (deftemplate game
 	(slot id))
 (deftemplate spectator
@@ -245,10 +257,28 @@
 	(retract ?p))
 
 (deffacts datum
-	(opposites clubs spades)
-	(opposites spades clubs)
-	(opposites diamonds hearts)
-	(opposites hearts diamonds)
+	(suit hearts)
+	(suit diamonds)
+	(suit clubs)
+	(suit spades)
+	(opposite-suit clubs spades)
+	(opposite-suit spades clubs)
+	(opposite-suit hearts diamonds)
+	(opposite-suit diamonds hearts)
+	(player-to-the-left-of 1 2)
+	(player-to-the-left-of 2 3)
+	(player-to-the-left-of 3 4)
+	(player-to-the-left-of 4 1)
+	(team-member 1 1)
+	(team-member 1 3)
+	(team-member 2 2)
+	(team-member 2 4)
+	(card-value 9 9)
+	(card-value 10 10)
+	(card-value jack 11)
+	(card-value queen 12)
+	(card-value king 13)
+	(card-value ace 14)
 	(card-score 9 9)
 	(card-score 10 10)
 	(card-score jack 11)
@@ -257,65 +287,98 @@
 	(card-score ace 14))
 
 (defrule setup
- (game (id ?id))
- =>
- (assert
- (hand ?id 1)
- (hand ?id 2)
- (hand ?id 3)
- (hand ?id 4)
- (player-to-the-left-of 1 2)
- (player-to-the-left-of 2 3)
- (player-to-the-left-of 3 4)
- (player-to-the-left-of 4 1)
- (dealer ?id 1 1)
- (deal-turn ?id 1)
- (shuffled-deck ?id)
- (unshuffled-deck ?id
-  9 spades
-  10 spades
-  jack spades
-  queen spades
-  king spades
-  ace spades
-  9 hearts
-  10 hearts
-  jack hearts
-  queen hearts
-  king hearts
-  ace hearts
-  9 diamonds
-  10 diamonds
-  jack diamonds
-  queen diamonds
-  king diamonds
-  ace diamonds
-  9 clubs
-  10 clubs
-  jack clubs
-  queen clubs
-  king clubs
-  ace clubs)))
-
-(defrule deal
-        (player-to-the-left-of ?next ?left)
-	(game (id ?gid))
-	(unshuffled-deck ?gid)
-	?s <- (shuffled-deck ?gid ?name ?suite $?rest)
-	?h <- (hand ?gid ?next $?start&:(< (length$ ?start) 10))
-	?d <- (deal-turn ?gid ?next)
-	(player (game ?gid) (seat 1))
-	(player (game ?gid) (seat 2))
-	(player (game ?gid) (seat 3))
-	(player (game ?gid) (seat 4))
+	(game (id ?id))
+	(player (game ?id) (seat 1))
+	(player (game ?id) (seat 2))
+	(player (game ?id) (seat 3))
+	(player (game ?id) (seat 4))
 	=>
-	(retract ?d ?h ?s)
-	(broadcast-to-other-players ?gid ?next (format nil "cardinhand %d" ?next))
-	(send-directly-to-player ?gid ?next (format nil "cardinhand %d %s %s" ?next (sym-cat ?name) ?suite))
 	(assert
-		(deal-turn ?gid ?left)
-		(shuffled-deck ?gid $?rest)
-		(hand ?gid ?next $?start ?name ?suite)))
+	(hand ?id 1)
+	(hand ?id 2)
+	(hand ?id 3)
+	(hand ?id 4)
+	(team-score ?id 1 0)
+	(team-score ?id 2 0)
+	(team-tricks-taken ?id 1 0)
+	(team-tricks-taken ?id 2 0)
+	(dealer ?id 1)
+	(dealt-round ?id 0)
+	(shuffled-deck ?id)
+	(unshuffled-deck ?id
+	 9 spades
+	 10 spades
+	 jack spades
+	 queen spades
+	 king spades
+	 ace spades
+	 9 hearts
+	 10 hearts
+	 jack hearts
+	 queen hearts
+	 king hearts
+	 ace hearts
+	 9 diamonds
+	 10 diamonds
+	 jack diamonds
+	 queen diamonds
+	 king diamonds
+	 ace diamonds
+	 9 clubs
+	 10 clubs
+	 jack clubs
+	 queen clubs
+	 king clubs
+	 ace clubs)))
+
+(defrule start-dealing
+        (player-to-the-left-of ?d ?p)
+	(game (id ?gid))
+	(dealer ?gid ?d)
+	?u <- (unshuffled-deck ?gid $?cards&:(= (length$ ?cards) 48))
+	?s <- (shuffled-deck ?gid)
+	=>
+	(retract ?s ?u)
+	(bind ?ii (* (random 1 24) 2))
+	(bind ?i (- ?ii 1))
+	(assert
+		(card-in-hand (game ?gid) (seat ?p) (name (nth$ ?i ?cards)) (suit (nth$ ?ii ?cards)))
+		(shuffled-deck ?gid (nth$ ?i ?cards) (nth$ ?ii ?cards))
+		(last-dealt ?gid ?p)
+		(unshuffled-deck ?gid (delete$ ?cards ?i ?ii))))
+
+(defrule continue-dealing
+	(game (id ?gid))
+	(player-to-the-left-of ?p ?np)
+	?l <- (last-dealt ?gid ?p)
+	?u <- (unshuffled-deck ?gid $?cards&:(and (<= (length$ ?cards) 46) (> (length$ ?cards) 8)))
+	?s <- (shuffled-deck ?gid $?scards)
+	=>
+	(retract ?l ?s ?u)
+	(bind ?ii (* (random 1 (integer (/ (length$ ?cards) 2))) 2))
+	(bind ?i (- ?ii 1))
+	(assert
+		(card-in-hand (game ?gid) (seat ?np) (name (nth$ ?i ?cards)) (suit (nth$ ?ii ?cards)))
+		(shuffled-deck ?gid $?scards (nth$ ?i ?cards) (nth$ ?ii ?cards))
+		(last-dealt ?gid ?np)
+		(unshuffled-deck ?gid (delete$ ?cards ?i ?ii))))
+
+(defrule announce-card-in-hand
+	(game (id ?gid))
+	(card-in-hand (game ?gid) (seat ?s) (name ?name) (suit ?suit))
+	=>
+	(broadcast-to-other-players ?gid ?s (format nil "cardinhand %d" ?s))
+	(send-directly-to-player ?gid ?s (format nil "cardinhand %d %s %s" ?s (sym-cat ?name) ?suit)))
+
+(defrule done-dealing
+	?d <- (dealt-round ?gid ?dealt)
+	?l <- (last-dealt ?gid ?)
+	(unshuffled-deck ?gid $?cards&:(= (length$ ?cards) 8))
+	=>
+	(retract ?d ?l)
+	(assert
+		(kitty ?gid)
+		(dealt-round ?gid (+ ?dealt 1))))
 
 (defrule reveal-top-trump-card
 	(game (id ?gid))
