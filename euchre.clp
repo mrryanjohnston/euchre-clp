@@ -371,6 +371,7 @@
 	(send-directly-to-player ?gid ?s (format nil "cardinhand %d %s %s" ?s (sym-cat ?name) ?suit)))
 
 (defrule done-dealing
+	(game (id ?gid))
 	?d <- (dealt-round ?gid ?dealt)
 	?l <- (last-dealt ?gid ?)
 	(unshuffled-deck ?gid $?cards&:(= (length$ ?cards) 8))
@@ -380,19 +381,31 @@
 		(kitty ?gid)
 		(dealt-round ?gid (+ ?dealt 1))))
 
-(defrule reveal-top-trump-card
+(defrule kitty
+	(game (id ?gid))
+	?u <- (unshuffled-deck ?gid $?cards&:(and (> (length$ ?cards) 0) (<= (length$ ?cards) 8)))
+	?k <- (kitty ?gid $?kitty)
+	?s <- (shuffled-deck ?gid $?scards)
+	=>
+	(retract ?k ?s ?u)
+	(bind ?ii (* (random 1 (integer (/ (length$ ?cards) 2))) 2))
+	(bind ?i (- ?ii 1))
+	(assert
+		(unshuffled-deck ?gid (delete$ ?cards ?i ?ii))
+		(shuffled-deck ?gid $?scards (nth$ ?i ?cards) (nth$ ?ii ?cards))
+		(kitty ?gid ?kitty (nth$ ?i ?cards) (nth$ ?ii ?cards))))
+
+(defrule announce-kitty
+        (player-to-the-left-of ?d ?p)
 	(game (id ?gid))
 	(dealer ?gid ?d)
-	?dt <- (deal-turn ?gid ?)
-	?s <- (shuffled-deck ?gid ?name ?suite $?rest&:(= (length$ ?rest) 6))
+	(unshuffled-deck ?gid)
+	?k <- (kitty ?gid $? ?name ?suit)
 	=>
-	(retract ?dt ?s)
-	(broadcast ?gid (format nil "Possible trump card is %s of %s" ?name ?suite))
-	(assert
-		(shuffled-deck ?gid)
-		(possible-trump-card ?gid ?name ?suite)
-		(kitty ?gid ?rest)
-		(bidder ?gid (+ ?d 1))))
+	(broadcast ?gid kitty)
+	(broadcast ?gid kitty)
+	(broadcast ?gid kitty)
+	(broadcast ?gid (format nil "kitty %s %s" ?name ?suit)))
 
 (defrule pick-it-up-or-pass
 	?b <- (bidder ?id ?p&:(< ?p 5))
