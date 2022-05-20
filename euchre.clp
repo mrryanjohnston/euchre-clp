@@ -163,7 +163,8 @@
 	?g <- (game-connection (game ?gid) (wsid ?wsid))
 	?s <- (parsed-message-from ?wsid leave)
 	=>
-	(retract ?g ?s))
+	(retract ?g ?s)
+	(printout ?wsid leave))
 
 (defrule leave-spectator
 	(session ?sid)
