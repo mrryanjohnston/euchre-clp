@@ -199,18 +199,10 @@
 
 (defrule announce-player-sits-down
 	(game (id ?gid))
-	(player (game ?gid) (sid ?sid) (seat ?seat))
-	=>
-	(broadcast ?gid (format nil "say Player %s sits at seat %d" ?sid ?seat)))
-
-(defrule inform-player-sits-down
-	(session ?sid)
-	(connection (sid ?sid) (wsid ?wsid))
-	(game (id ?gid))
-	(player (game ?gid) (sid ?sid) (seat ?seat))
 	(game-connection (game ?gid) (wsid ?wsid))
+	(player (game ?gid) (sid ?sid) (seat ?seat))
 	=>
-	(format ?wsid "sit %d" ?seat))
+	(format ?wsid "sit %s %d" ?sid ?seat))
 
 (defrule seat-taken
 	(session ?sid)
@@ -241,10 +233,9 @@
 	?pl <- (player (game ?gid) (seat ?seat) (sid ?sid))
 	?p <- (parsed-message-from ?wsid stand)
 	=>
-	(printout ?wsid "stand")
 	(retract ?pl ?p)
 	(assert (spectator (game ?gid) (sid ?sid)))
-	(broadcast ?gid (format nil "say Player %s stands up" ?sid)))
+	(broadcast ?gid (format nil "stand %s %d" ?sid ?seat)))
 
 (defrule already-standing
 	(session ?sid)
