@@ -48,14 +48,13 @@
 	(not (session ?sid))
 	=>
 	(println "[euchre.clp] New User " ?sid " connected for the first time!")
-	(assert (session ?sid)))
+	(assert (session ?sid) (name ?sid ?sid)))
 
 (defrule connection
 	(session ?sid)
 	(connection (sid ?sid) (wsid ?wsid))
 	=>
-	(println "[euchre.clp] User " ?sid " connected on websocket " ?wsid)
-	(printout ?wsid "say SERVER Welcome to the game!"))
+	(println "[euchre.clp] User " ?sid " connected on websocket " ?wsid))
 
 (defrule disconnection
 	(session ?sid)
@@ -92,6 +91,28 @@
 	?s <- (parsed-message-from ?wsid say $?msg)
 	=>
 	(retract ?s))
+
+(defrule setname
+	(connection (sid ?sid) (wsid ?wsid))
+	?n <- (name ?sid ?name)
+	?s <- (parsed-message-from ?wsid setname $?msg&:(< (str-length (implode$ ?msg)) 16))
+	=>
+	(retract ?n ?s)
+	(assert (name ?sid (implode$ ?msg))))
+
+(defrule setname-too-long
+	(connection (sid ?sid) (wsid ?wsid))
+	(name ?sid ?name)
+	?s <- (parsed-message-from ?wsid setname $?msg&:(> (str-length (implode$ ?msg)) 15))
+	=>
+	(retract ?s)
+	(format ?wsid "error ERROR: Name too long; please choose something less than 15 characters"))
+
+(defrule successful-setname
+	(connection (sid ?sid) (wsid ?wsid))
+	(name ?sid ?name)
+	=>
+	(format ?wsid "setname %s" ?name))
 
 (defrule broadcast-say
 	(session ?sid)
