@@ -54,7 +54,8 @@
 	(session ?sid)
 	(connection (sid ?sid) (wsid ?wsid))
 	=>
-	(println "[euchre.clp] User " ?sid " connected on websocket " ?wsid))
+	(println "[euchre.clp] User " ?sid " connected on websocket " ?wsid)
+	(format ?wsid "id %s" ?sid))
 
 (defrule disconnection
 	(session ?sid)
@@ -113,6 +114,16 @@
 	(name ?sid ?name)
 	=>
 	(format ?wsid "setname %s" ?name))
+
+(defrule is-name
+	(name ?sid ?name)
+	(connection (sid ?sid) (wsid ?wsid))
+	(connection (sid ?ssid&~?sid) (wsid ?wwsid))
+	(game (id ?gid))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(game-connection (game ?gid) (wsid ?wwsid))
+	=>
+	(format ?wwsid "is %s %s" ?sid ?name))
 
 (defrule broadcast-say
 	(session ?sid)
@@ -174,7 +185,7 @@
 	(not (spectator (game ?gid) (sid ?sid)))
 	(not (player (game ?gid) (sid ?sid)))
 	=>
-	(broadcast ?gid (format nil "say Player %s starts spectating" ?sid))
+	(broadcast ?gid (format nil "spectate %s" ?sid))
 	(assert (spectator (game ?gid) (sid ?sid))))
 
 (defrule leave-game
