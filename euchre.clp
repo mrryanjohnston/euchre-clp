@@ -113,7 +113,7 @@
 	(connection (sid ?sid) (wsid ?wsid))
 	(name ?sid ?name)
 	=>
-	(format ?wsid "setname %s" ?name))
+	(format ?wsid "is %s %s" ?sid ?name))
 
 (defrule is-name
 	(name ?sid ?name)
