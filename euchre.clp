@@ -120,8 +120,10 @@
 	(connection (sid ?sid) (wsid ?wsid))
 	(connection (sid ?ssid&~?sid) (wsid ?wwsid))
 	(game (id ?gid))
-	(game-connection (game ?gid) (wsid ?wsid))
-	(game-connection (game ?gid) (wsid ?wwsid))
+	(or (player (game ?gid) (sid ?sid))
+	    (spectator (game ?gid) (sid ?sid)))
+	(or (player (game ?gid) (sid ?ssid))
+	    (spectator (game ?gid) (sid ?ssid)))
 	=>
 	(format ?wwsid "is %s %s" ?sid ?name))
 
