@@ -402,8 +402,9 @@
 	(connection (sid ?sid) (wsid ?wsid))
 	(game (id ?gid))
 	(game-connection (game ?gid) (wsid ?wsid))
-	(player (game ?gid) (seat ?s) (sid ?sid))
-	(card-in-hand (game ?gid) (seat ?ss&~?s))
+	(card-in-hand (game ?gid) (seat ?ss))
+	(or (player (game ?gid) (seat ?s&~?ss) (sid ?sid))
+	    (spectator (game ?gid) (sid ?sid)))
 	=>
 	(format ?wsid "cardinhand %d" ?ss))
 
