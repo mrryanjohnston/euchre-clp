@@ -133,16 +133,14 @@ func WriteWsCallback(e *C.Environment, logicalName *C.cchar_t, str *C.cchar_t, c
 }
 //export ReadWsCallback
 func ReadWsCallback(e *C.Environment, logicalName *C.cchar_t, context unsafe.Pointer) C.int {
-	id := C.GoString(logicalName)
-	w := websockets[id]
+	w := websockets[C.GoString(logicalName)]
 	ch := w.b[0]
 	w.b = w.b[1:]
 	return C.int(ch)
 }
 //export UnreadWsCallback
 func UnreadWsCallback(e *C.Environment, logicalName *C.cchar_t, ch C.int, context unsafe.Pointer) C.int {
-	id := C.GoString(logicalName)
-	w := websockets[id]
+	w := websockets[C.GoString(logicalName)]
 	w.b = append(w.b, byte(ch))
 	return C.int(ch)
 }
