@@ -320,10 +320,6 @@
 	(player (game ?id) (seat 4))
 	=>
 	(assert
-	(hand ?id 1)
-	(hand ?id 2)
-	(hand ?id 3)
-	(hand ?id 4)
 	(team-score ?id 1 0)
 	(team-score ?id 2 0)
 	(team-tricks-taken ?id 1 0)
@@ -438,281 +434,103 @@
 	(game-connection (game ?gid) (wsid ?wsid))
 	(unshuffled-deck ?gid)
 	?k <- (kitty ?gid $? ?name ?suit)
+	(dealt-round ?gid ?dealt)
 	=>
 	(printout ?wsid kitty)
 	(printout ?wsid kitty)
 	(printout ?wsid kitty)
 	(format ?wsid "kitty %s %s" (sym-cat ?name) ?suit))
 
-(defrule pick-it-up-or-pass
-	?b <- (bidder ?id ?p&:(< ?p 5))
-	(not (bidder ?id ?p ?))
-	=>
-	(print "Player " ?p " pick-it-up or pass?: ")
-	(assert (bidder ?id ?p (read))))
-
-(defrule illegal-bidder-choice
-	?b <- (bidder ?id ? ~pick-it-up&~pass)
-	=>
-	(println "error ERROR: Please only enter pick-it-up or pass")
-	(retract ?b))
-
-(defrule bidder-pass
-	(bidder ?id ?b)
-	(bidder ?id ?b pass)
-	=>
-	(assert (bidder ?id (+ ?b 1))))
-
-(defrule all-bidders-pass
-	(dealer ?id ?d)
-	?p <- (possible-trump-card ?id ?t ?name ?suite)
-	(forall (hand ?id ?p $?) (bidder ?id ?p pass))
-	=>
-	(println "Everyone passed on using " ?suite " as trump")
-	(retract ?p)
-	(assert (chooses-trump-suite ?id (+ ?d 1))))
-
-(defrule reset-bidder
-	?b <- (bidder ?id 5)
-	=>
-	(retract ?b)
-	(assert (bidder ?id 1)))
-
-(defrule reset-chooses-trump-suite
-	?c <- (chooses-trump-suite ?id 5)
-	=>
-	(retract ?c)
-	(assert (chooses-trump-suite ?id 1)))
-
-(defrule player-chooses-trump-suite
-	(chooses-trump-suite ?id ?c&~5)
-	(not (trump-suite ?id ? ?))
-	=>
-	(println "Player " ?c " chooses trump suite")
-	(println "hearts")
-	(println "diamonds")
-	(println "clubs")
-	(println "spades")
-	(print "choice: ")
-	(assert (trump-suite ?id (read))))
-
-(defrule bad-trump-suite
-	?t <- (trump-suite ?id ~hearts&~diamonds&~clubs&~spades)
-	=>
-	(retract ?t)
-	(println "error ERROR: bad trump suite"))
-
-(defrule announce-trump-suite
-	(trump-suite ?id ?t&hearts|diamonds|clubs|spades)
-	=>
-	(println "Trump suite is " ?t))
-
-(defrule clean-up-chooses-trump-suite
-	?c <- (chooses-trump-suite ?id ?)
-	(trump-suite ?id hearts|diamonds|clubs|spades)
-	=>
-	(retract ?c))
-
-(defrule trump-card-picked-up
-	(dealer ?id ?d)
-	(hand ?id ?d $?cards)
-	?p <- (possible-trump-card ?id ?name ?suite)
-	(bidder ?id ?)
-	(bidder ?id ? pick-it-up)
-	=>
-	(retract ?p)
-	(assert
-		(trump-card ?id ?name ?suite)
-		(trump-suite ?id ?suite)))
-
-(defrule clean-up-bidders
-	?b <- (bidder ?id $?)
-	(trump-suite ?id hearts|diamonds|clubs|spades)
-	=>
-	(retract ?b))
-
-(defrule dealer-picks-up-trump-card
-	(dealer ?id ?d)
-	(hand ?id ?d $?cards)
-	(trump-card ?id ?name ?suite)
-	(not (swap-choice ?id ?))
-	=>
-	(println "Choose a card for dealer to swap with " ?name " of " ?suite)
-	(loop-for-count (?c 0 4) do
-		(bind ?n (+ (* ?c 2) 1))
-		(bind ?s (+ ?n 1))
-		(println (+ ?c 1) ": " (nth$ ?n ?cards) " of " (nth$ ?s ?cards)))
-	(print "choice: ")
-	(assert (swap-choice ?id (read))))
-
-(defrule bad-choice
-	?l <- (swap-choice ?id FALSE)
-	=>
-	(retract ?l)
-	(println "error ERROR: Please enter a number"))
-
-(defrule choice-out-of-range
-	?l <- (swap-choice ?id ~1&~2&~3&~4&~5)
-	=>
-	(retract ?l)
-	(println "error ERROR: Please enter a number between 1 and 5"))
-
-(defrule dealer-chooses
-	(dealer ?id ?d)
-	?h <- (hand ?id ?d $?cards)
-	?k <- (kitty ?id $?rest)
-	?t <- (trump-card ?id ?name ?suite)
-	?l <- (swap-choice ?id ?i)
-	=>
-	(retract ?h ?k ?l ?t)
-	(bind ?n (+ (* (- ?i 1) 2) 1))
-	(bind ?s (+ ?n 1))
-	(println "Dealer picks up " ?name " of " ?suite)
-	(println "Dealer discards " (nth$ ?n ?cards) " of " (nth$ ?s ?cards) " from hand into kitty")
-	(assert
-		(kitty ?id ?rest (nth$ ?n ?cards) (nth$ ?s ?cards))
-		(hand ?id ?d (delete$ ?cards ?n ?s) ?name ?suite)))
-
-(defrule begin-tricks
-	(dealer ?id ?d)
-	(trump-suite ?id hearts|diamonds|clubs|spades)
-	(not (chooses-trump-suite ?id ?))
-	(not (trump-card ?id ? ?))
-	=>
-	(assert (trick ?id 1 (+ ?d 1))))
-
-(defrule reset-trick
-	?t <- (trick ?id ?trick 5)
-	=>
-	(retract ?t)
-	(assert (trick ?id ?trick 1)))
-
-(defrule players-turn
-	(dealer ?id ?d)
-	(hand ?id ?p $?cards)
-	(trick ?id ?trick ?p)
-	(not (trick-choice ?id ?trick ?p ?))
-	=>
-	(println "Player " ?p "'s turn")
-	(loop-for-count (?c 1 (integer (/ (length$ ?cards) 2))) do
-		(bind ?name (+ (* (- ?c 1) 2) 1))
-		(bind ?suite (+ ?name 1))
-		(println ?c ": " (nth$ ?name ?cards) " of " (nth$ ?suite ?cards)))
-	(print "choice: ")
-	(assert (trick-choice ?id ?trick ?p (read))))
-
-(defrule leading-suite
-	(dealer ?d)
-	?h <- (hand ?id ?p&:(= ?p (+ ?d 1)) $?cards)
-	(trick ?id ?t ?p)
-	(trick-choice ?id ?t ?p ?c)
-	(not (trick-choice-card ?id ?t ?p ? ?))
-	=>
-	(retract ?h)
-	(bind ?name (+ (* (- ?c 1) 2) 1))
-	(bind ?suite (+ ?name 1))
-	(println crlf "Player " ?p " plays " (nth$ ?name ?cards) " of " (nth$ ?suite ?cards) crlf)
-	(println "Leading suite is " (nth$ ?suite ?cards) crlf)
-	(assert
-		(trick-choice-card ?id ?t ?p (nth$ ?name ?cards) (nth$ ?suite ?cards))
-		(hand ?id ?p (delete$ ?cards ?name ?suite))
-		(leading-suite ?id ?t (nth$ ?suite ?cards))
-		(trick ?id ?t (+ ?p 1))))
-
-(defrule bad-trick-choice
-	(trick ?id ?trick ?p)
-	(hand ?id ?p $?cards)
-	?t <- (trick-choice ?id ?trick ?p ?c&:(or (> ?c (/ (length$ ?cards) 2)) (< ?c 1)))
-	(not (trick-choice-card ?id ?trick ?p ? ?))
-	=>
-	(retract ?t)
-	(println "error ERROR: Please enter a number 1 thru " (/ (length$ ?cards) 2)))
-
-(defrule trick-choice-out-of-leading-suite
-	(dealer ?id ?d)
-	(hand ?id ?p $?cards)
-	(leading-suite ?id ?trick ?suite)
-	(trick ?id ?trick ?p)
-	?t <- (trick-choice ?id ?trick ?p ?c)
-	(not (trick-choice-card ?id ?trick ?p ? ?))
-	(test (and
-		(neq (nth$ (* ?c 2) ?cards) ?suite)
-		(member$ ?suite ?cards)))
-	=>
-	(retract ?t)
-	(println "error ERROR: You cannot use an out-of-suite card when you have cards in the leading suite."))
-
-(defrule valid-trick-choice
+(defrule start-kitty-bidding
+	(player-to-the-left-of ?d ?p)
+	(connection (sid ?sid) (wsid ?wsid))
 	(game (id ?gid))
 	(dealer ?gid ?d)
-	(trick-choice-card ?gid ?trick ?l&:(= ?l (+ 1 ?d)) ? ?suite)
-	?h <- (hand ?gid ?p&:(<> ?p ?l) $?cards)
-	(trick ?gid ?t ?p)
-	(trick-choice ?gid ?t ?p ?c&:(and (>= ?c 1) (<= ?c (/ (length$ ?cards) 2))))
-	(not (trick-choice-card ?gid ?t ?p ? ?))
-	(test (or
-		(eq (nth$ (* ?c 2) ?cards) ?suite)
-		(not (member$ ?suite ?cards))))
+	(player (game ?gid) (seat ?p) (sid ?sid))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(not (expected-bidder ?gid ?))
 	=>
-	(retract ?h)
-	(bind ?name (+ (* (- ?c 1) 2) 1))
-	(bind ?suite (+ ?name 1))
-	(broadcast ?gid (format nil "cardinplay %n %s %s" ?p (nth$ ?name ?cards) (nth$ ?suite ?cards)))
-	(broadcast ?gid (format nil "say Player %n plays %s of %s" ?p (nth$ ?name ?cards) (nth$ ?suite ?cards)))
-	(println crlf "Player " ?p " plays " (nth$ ?name ?cards) " of " (nth$ ?suite ?cards) crlf)
+	(assert (expected-bidder ?gid ?p))
+	(printout ?wsid "bid"))
+
+(defrule announce-bidder
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(expected-bidder ?gid ?p)
+	=>
+	(format ?wsid "bidder %d" ?p))
+
+(defrule bad-bid
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid) (seat ?seat))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(expected-bidder ?gid ?seat)
+	?p <- (parsed-message-from ?wsid bid $? ~yes&~no)
+	=>
+	(printout ?wsid "error ERROR: bad choice")
+	(retract ?p))
+
+(defrule bad-bidder
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid) (seat ?seat))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(expected-bidder ?gid ~?seat)
+	?p <- (parsed-message-from ?wsid bid $?)
+	=>
+	(printout ?wsid "error ERROR: it's not your turn to bid")
+	(retract ?p))
+
+(defrule bid-is-no
+	(player-to-the-left-of ?seat ?np)
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid) (seat ?seat))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(expected-bidder ?gid ?seat)
+	?p <- (parsed-message-from ?wsid bid no)
+	(not (bid ?gid ?seat ?))
+	=>
+	(retract ?p)
 	(assert
-		(trick-choice-card ?gid ?t ?p (nth$ ?name ?cards) (nth$ ?suite ?cards))
-		(hand ?gid ?p (delete$ ?cards ?name ?suite))
-		(trick ?gid ?t (+ ?p 1))))
+		(bid ?gid ?seat pass)
+		(expected-bidder ?gid ?np)))
 
-(defrule score-trick-choice-card-trump-left-bower
-	(trump-suite ?id ?t ?suite)
-	(trick-choice-card ?id ?t ?p jack ?suite)
-	(forall (hand ?id ?h $?) (trick-choice-card ?id ?t ?h ? ?))
+(defrule bid-is-yes
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid) (seat ?seat))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(expected-bidder ?gid ?seat)
+	?p <- (parsed-message-from ?wsid bid yes)
+	(not (bid ?seat ? ?))
 	=>
-	(assert (trick-winner ?id ?t ?p)))
+	(retract ?p)
+	(assert (bid ?gid ?seat pick-it-up)))
 
-(defrule score-trick-choice-card-trump-right-bower
-	(opposites ?suite ?s)
-	(trump-suite ?id ?t ?suite)
-	(trick-choice-card ?id ?t ?p jack ?s)
-	(not (trick-choice-card ?id ?t ? jack ?suite))
-	(forall (hand ?id ?h $?) (trick-choice-card ?id ?t ?h ? ?))
+(defrule pick-it-up
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(or (spectator (game ?gid) (sid ?sid))
+	    (player (game ?gid) (sid ?sid)))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(kitty ?gid $? ?name ?suit)
+	(bid ?gid ?seat pick-it-up)
 	=>
-	(assert (trick-winner ?id ?t ?p)))
+	(format ?wsid "trump %s %s" (sym-cat ?name) ?suit))
 
-(defrule score-trick-choice-card-trump
-	(opposites ?suite ?s)
-	(card-score ?name ?value)
-	(trump-suite ?id ?t ?suite)
-	(trick-choice-card ?id ?t ?p ?name&~jack ?suite)
-	(not (trick-choice-card ?id ?t ~?p jack ?suite|?s))
-	(not (and (card-score ?n ?v) (trick-choice-card ?id ?t ? ?n&:(> ?v ?value) ?suite)))
-	(forall (hand ?id ?h $?) (trick-choice-card ?id ?t ?h ? ?))
+(defrule all-pass
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(or (spectator (game ?gid) (sid ?sid))
+	    (player (game ?gid) (sid ?sid)))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(kitty ?gid $? ?name ?suit)
+	(forall (player (game ?gid) (seat ?s))
+		(bid ?gid ?s pass))
 	=>
-	(assert (trick-winner ?id ?t ?p)))
+	(printout ?wsid "allpass"))
 
-(defrule score-trick-choice-card-leading
-	(opposites ?s ?os)
-	(card-score ?name ?value)
-	(dealer ?id ?d)
-	(trump-suite ?id ?t ?s)
-	(leading-suite ?id ?t ?suite&~?s)
-	(trick-choice-card ?id ?t ?p ?name ?suite)
-	(not (trick-choice-card ?id ? ? ? ?s))
-	(not (trick-choice-card ?id ? ? jack ?os))
-	(not (and (card-score ?n ?v) (trick-choice-card ?id ?t ? ?n&:(> ?v ?value) ?suite)))
-	(forall (hand ?id ?h $?) (trick-choice-card ?id ?t ?h ? ?))
-	=>
-	(assert (trick-winner ?id ?t ?p)))
-
-(defrule shuffle
-	?u <- (unshuffled-deck ?id $?cards&:(> (length$ ?cards) 0))
-	?s <- (shuffled-deck ?id $?start)
-	=>
-	(retract ?s ?u)
-	(bind ?suite (* (random 1 (integer (/ (length$ ?cards) 2))) 2))
-	(bind ?name (- ?suite 1))
-	(assert
-	 (shuffled-deck ?id ?start (nth$ ?name ?cards) (nth$ ?suite ?cards))
-	 (unshuffled-deck ?id (delete$ ?cards ?name ?suite))))

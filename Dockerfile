@@ -1,13 +1,16 @@
 FROM golang:1.18
 
 WORKDIR /usr/src/app
-COPY go.mod go.sum ./
-ENV GOPROXY=direct
-RUN go mod tidy
+COPY go.mod ./
+COPY go.sum ./
 RUN go mod download
-RUN go mod verify
 
-COPY . .
+COPY *.h ./
+COPY *.c ./
+
+COPY *.go ./
 RUN go build -v -o /usr/local/bin/app .
 
+COPY *.bat ./
+COPY *.clp ./
 CMD ["app"]

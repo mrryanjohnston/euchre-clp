@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"github.com/gorilla/mux"
 	"net/http"
 	"unsafe"
 	"github.com/gorilla/websocket"
@@ -27,7 +26,6 @@ void ExitWsCallback(Environment *environment,int,void *);
 import "C"
 
 var addr = flag.String("addr", "0.0.0.0:8765", "websocket address")
-//var upgrader = websocket.Upgrader{ CheckOrigin: func(r *http.Request) bool { return r.Header.Get("Origin") == "http://localhost:3000" } }
 var upgrader = websocket.Upgrader{}
 var store = sessions.NewCookieStore([]byte("euchre-development"))
 var websockets = make(map[string]*Conn)
@@ -164,8 +162,7 @@ func CreateRouterForWebsocketConnection(e *C.Environment, id string) {
 }
 func main() {
 	flag.Parse()
-	r := mux.NewRouter()
-	r.HandleFunc("/websocket", Websocket)
+	http.HandleFunc("/websocket", Websocket)
 	go StartRulesEngine()
-	http.ListenAndServe(*addr, r)
+	http.ListenAndServe(*addr, nil)
 }
