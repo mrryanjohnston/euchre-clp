@@ -3,6 +3,7 @@ FROM golang:1.18
 WORKDIR /usr/src/app
 COPY go.mod ./
 COPY go.sum ./
+ENV GOPROXY direct
 RUN go mod download
 
 COPY *.h ./
