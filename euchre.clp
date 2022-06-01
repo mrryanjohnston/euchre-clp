@@ -219,6 +219,15 @@
 	(printout ?wsid "error ERROR: Could not join game because it does not exist")
 	(retract ?s))
 
+(defrule not-connected-to-a-game-to-leave
+	(session ?sid)
+	(connection (sid ?sid) (wsid ?wsid))
+	?s <- (parsed-message-from ?wsid leave)
+	(not (game-connection (wsid ?wsid)))
+	=>
+	(printout ?wsid "error ERROR: Could not leave game; not currently in one")
+	(retract ?s))
+
 (defrule sit
 	(session ?sid)
 	(connection (sid ?sid) (wsid ?wsid))
