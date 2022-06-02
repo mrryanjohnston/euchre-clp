@@ -11,7 +11,8 @@
 	(slot suit)
 	(slot choice (default 0)))
 (deftemplate game
-	(slot id))
+	(slot id)
+	(slot started (default FALSE)))
 (deftemplate spectator
 	(slot game)
 	(slot sid))
@@ -272,7 +273,7 @@
 (defrule stand
 	(session ?sid)
 	(connection (sid ?sid) (wsid ?wsid))
-	(game (id ?gid))
+	(game (id ?gid) (started FALSE))
 	?pl <- (player (game ?gid) (seat ?seat) (sid ?sid))
 	?p <- (parsed-message-from ?wsid stand)
 	=>
@@ -289,6 +290,17 @@
 	(game-connection (game ?gid) (wsid ?wsid))
 	=>
 	(printout ?wsid "error ERROR: Could not stand; you're not sitting down")
+	(retract ?p))
+
+(defrule cannot-stand-after-game-started
+	(session ?sid)
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid) (started TRUE))
+	(player (game ?gid) (sid ?sid))
+	?p <- (parsed-message-from ?wsid stand)
+	(game-connection (game ?gid) (wsid ?wsid))
+	=>
+	(printout ?wsid "error ERROR: Could not stand; game has begun")
 	(retract ?p))
 
 (deffacts datum
@@ -322,12 +334,13 @@
 	(card-score ace 14))
 
 (defrule setup
-	(game (id ?id))
+	?g <- (game (id ?id) (started FALSE))
 	(player (game ?id) (seat 1))
 	(player (game ?id) (seat 2))
 	(player (game ?id) (seat 3))
 	(player (game ?id) (seat 4))
 	=>
+	(modify ?g (started TRUE))
 	(assert
 	(team-score ?id 1 0)
 	(team-score ?id 2 0)
