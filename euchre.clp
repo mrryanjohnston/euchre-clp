@@ -458,6 +458,7 @@
 	(player (game ?gid) (seat ?p) (sid ?sid))
 	(game-connection (game ?gid) (wsid ?wsid))
 	(not (expected-bidder ?gid ?))
+	(not (trump-suit ?gid ?))
 	=>
 	(assert (expected-bidder ?gid ?p))
 	(printout ?wsid "bid"))
@@ -499,11 +500,11 @@
 	(game (id ?gid))
 	(player (game ?gid) (sid ?sid) (seat ?seat))
 	(game-connection (game ?gid) (wsid ?wsid))
-	(expected-bidder ?gid ?seat)
+	?e <- (expected-bidder ?gid ?seat)
 	?p <- (parsed-message-from ?wsid bid no)
 	(not (bid ?gid ?seat ?))
 	=>
-	(retract ?p)
+	(retract ?e ?p)
 	(assert
 		(bid ?gid ?seat pass)
 		(expected-bidder ?gid ?np)))
@@ -515,7 +516,7 @@
 	(game-connection (game ?gid) (wsid ?wsid))
 	(expected-bidder ?gid ?seat)
 	?p <- (parsed-message-from ?wsid bid yes)
-	(not (bid ?seat ? ?))
+	(not (bid ?gid ?seat ?))
 	=>
 	(retract ?p)
 	(assert (bid ?gid ?seat pick-it-up)))
@@ -528,8 +529,15 @@
 	(game-connection (game ?gid) (wsid ?wsid))
 	(kitty ?gid $? ?name ?suit)
 	(bid ?gid ?seat pick-it-up)
+	(not (trump-suit ?gid ?))
 	=>
-	(format ?wsid "trump %s %s" (sym-cat ?name) ?suit))
+	(assert (trump-suit ?gid ?suit)))
+
+(defrule announce-trump-suit
+	(game-connection (game ?gid) (wsid ?wsid))
+	(trump-suit ?gid ?suit)
+	=>
+	(format ?wsid "trump %s" ?suit))
 
 (defrule all-pass
 	(connection (sid ?sid) (wsid ?wsid))
@@ -542,4 +550,3 @@
 		(bid ?gid ?s pass))
 	=>
 	(printout ?wsid "allpass"))
-
