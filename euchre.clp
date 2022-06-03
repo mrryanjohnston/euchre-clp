@@ -482,6 +482,8 @@
 	(player (game ?gid) (sid ?sid))
 	(game-connection (game ?gid) (wsid ?wsid))
 	(expected-bidder ?gid ?p)
+	(not (bid ?gid ?p ?))
+	(not (all-pass ?gid ?))
 	=>
 	(format ?wsid "bidder %d" ?p))
 
@@ -550,16 +552,118 @@
 	(game-connection (game ?gid) (wsid ?wsid))
 	(trump-suit ?gid ?suit)
 	=>
-	(format ?wsid "trump %s" ?suit))
+	(format ?wsid "trump %s" ?suit)
+	(printout ?wsid "bidder"))
+
+(defrule clean-up-bid-facts-after-trump-chosen
+	(game (id ?gid))
+	?b <- (bid ?gid ? ?)
+	(trump-suit ?gid ?)
+	=>
+	(retract ?b))
+
+(defrule clean-up-expected-bidder-facts-after-trump-chosen
+	(game (id ?gid))
+	?e <- (expected-bidder ?gid ?)
+	(trump-suit ?gid ?)
+	=>
+	(retract ?e))
+
+(defrule clean-up-expected-trump-selector-facts-after-trump-chosen
+	(game (id ?gid))
+	?e <- (expected-trump-selector ?gid ?p)
+	(trump-suit ?gid ?)
+	=>
+	(retract ?e))
 
 (defrule all-pass
-	(connection (sid ?sid) (wsid ?wsid))
 	(game (id ?gid))
-	(or (spectator (game ?gid) (sid ?sid))
-	    (player (game ?gid) (sid ?sid)))
-	(game-connection (game ?gid) (wsid ?wsid))
 	(kitty ?gid $? ?name ?suit)
 	(forall (player (game ?gid) (seat ?s))
 		(bid ?gid ?s pass))
 	=>
-	(printout ?wsid "allpass"))
+	(assert (all-pass ?gid ?suit)))
+
+(defrule announce-all-pass
+	(game (id ?gid))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(all-pass ?gid ?suit)
+	=>
+	(printout ?wsid "bidder")
+	(format ?wsid "allpass %s" ?suit))
+
+(defrule start-trump-selection
+	(player-to-the-left-of ?d ?p)
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(dealer ?gid ?d)
+	(player (game ?gid) (seat ?p) (sid ?sid))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(all-pass ?gid ?suit)
+	(not (expected-trump-selector ?gid ?))
+	(not (trump-suit ?gid ?))
+	=>
+	(assert (expected-trump-selector ?gid ?p))
+	(format ?wsid "allpass %s" ?suit)
+	(printout ?wsid "trumpselection"))
+
+(defrule announce-trump-selector
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(expected-trump-selector ?gid ?p)
+	=>
+	(format ?wsid "trumpselector %d" ?p))
+
+(defrule bad-trump-selection
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid) (seat ?seat))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(all-pass ?gid ?suit)
+	(expected-trump-selector ?gid ?seat)
+	?p <- (parsed-message-from ?wsid trump $? ?suit|~hearts&~diamonds&~clubs&~spades&~no)
+	=>
+	(printout ?wsid "error ERROR: bad choice")
+	(retract ?p))
+
+(defrule bad-trump-selector
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid) (seat ?seat))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(expected-trump-selector ?gid ~?seat)
+	?p <- (parsed-message-from ?wsid trump $?)
+	=>
+	(printout ?wsid "error ERROR: it's not your turn to select trump")
+	(retract ?p))
+
+(defrule trump-selection-is-no
+	(player-to-the-left-of ?seat ?np)
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid) (seat ?seat))
+	(game-connection (game ?gid) (wsid ?wsid))
+	?e <- (expected-trump-selector ?gid ?seat)
+	?p <- (parsed-message-from ?wsid trump no)
+	(not (trump-selection ?gid ?seat ?))
+	=>
+	(retract ?e ?p)
+	(assert
+		(trump-selection ?gid ?seat pass)
+		(expected-trump-selector ?gid ?np)))
+
+(defrule trump-selection-is-valid-suit
+	(player-to-the-left-of ?seat ?np)
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid) (seat ?seat))
+	(game-connection (game ?gid) (wsid ?wsid))
+	?a <- (all-pass ?gid ?suit)
+	?e <- (expected-trump-selector ?gid ?seat)
+	?p <- (parsed-message-from ?wsid trump ~?suit&hearts|diamons|clubs|spades)
+	(not (trump-selection ?gid ?seat ?))
+	=>
+	(retract ?a ?e ?p)
+	(assert (trump-suit ?gid ?suit)))
