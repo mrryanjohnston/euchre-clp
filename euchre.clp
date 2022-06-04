@@ -621,9 +621,20 @@
 	(game (id ?gid))
 	(player (game ?gid) (sid ?sid) (seat ?seat))
 	(game-connection (game ?gid) (wsid ?wsid))
+	(expected-trump-selector ?gid ?seat)
+	?p <- (parsed-message-from ?wsid trump $? ~hearts&~diamonds&~clubs&~spades&~no)
+	=>
+	(printout ?wsid "error ERROR: bad choice")
+	(retract ?p))
+
+(defrule bad-trump-selection-all-pass-selected
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid) (seat ?seat))
+	(game-connection (game ?gid) (wsid ?wsid))
 	(all-pass ?gid ?suit)
 	(expected-trump-selector ?gid ?seat)
-	?p <- (parsed-message-from ?wsid trump $? ?suit|~hearts&~diamonds&~clubs&~spades&~no)
+	?p <- (parsed-message-from ?wsid trump $? ?suit)
 	=>
 	(printout ?wsid "error ERROR: bad choice")
 	(retract ?p))
@@ -662,7 +673,7 @@
 	(game-connection (game ?gid) (wsid ?wsid))
 	?a <- (all-pass ?gid ?suit)
 	?e <- (expected-trump-selector ?gid ?seat)
-	?p <- (parsed-message-from ?wsid trump ~?suit&hearts|diamons|clubs|spades)
+	?p <- (parsed-message-from ?wsid trump ~?suit&~no&hearts|diamons|clubs|spades)
 	(not (trump-selection ?gid ?seat ?))
 	=>
 	(retract ?a ?e ?p)
