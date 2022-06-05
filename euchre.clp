@@ -484,6 +484,7 @@
 	(expected-bidder ?gid ?p)
 	(not (bid ?gid ?p ?))
 	(not (all-pass ?gid ?))
+	(not (trump-suit ?gid ?))
 	=>
 	(format ?wsid "bidder %d" ?p))
 
@@ -552,8 +553,7 @@
 	(game-connection (game ?gid) (wsid ?wsid))
 	(trump-suit ?gid ?suit)
 	=>
-	(format ?wsid "trump %s" ?suit)
-	(printout ?wsid "bidder"))
+	(format ?wsid "trump %s" ?suit))
 
 (defrule clean-up-bid-facts-after-trump-chosen
 	(game (id ?gid))
@@ -613,14 +613,36 @@
 	(player (game ?gid) (sid ?sid))
 	(game-connection (game ?gid) (wsid ?wsid))
 	(expected-trump-selector ?gid ?p)
+	(not (trump-selection ?gid ?p ?))
 	=>
 	(format ?wsid "trumpselector %d" ?p))
+
+(defrule announce-screw-the-dealer
+	(connection (wsid ?wsid))
+	(game (id ?gid))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(dealer ?gid ?d)
+	(expected-trump-selector ?gid ?d)
+	=>
+	(format ?wsid "screwthedealer"))
+
+(defrule bad-screw-the-dealer-selection-no
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid) (seat ?seat))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(dealer ?gid ?seat)
+	?p <- (parsed-message-from ?wsid trump $? no)
+	=>
+	(printout ?wsid "error ERROR: bad choice; dealer MUST choose trump suit")
+	(retract ?p))
 
 (defrule bad-trump-selection
 	(connection (sid ?sid) (wsid ?wsid))
 	(game (id ?gid))
 	(player (game ?gid) (sid ?sid) (seat ?seat))
 	(game-connection (game ?gid) (wsid ?wsid))
+	(dealer ?gid ~?seat)
 	(expected-trump-selector ?gid ?seat)
 	?p <- (parsed-message-from ?wsid trump $? ~hearts&~diamonds&~clubs&~spades&~no)
 	=>
@@ -636,7 +658,7 @@
 	(expected-trump-selector ?gid ?seat)
 	?p <- (parsed-message-from ?wsid trump $? ?suit)
 	=>
-	(printout ?wsid "error ERROR: bad choice")
+	(printout ?wsid "error ERROR: bad choice; cannot choose suit that was passed upon during bidding")
 	(retract ?p))
 
 (defrule bad-trump-selector
@@ -656,6 +678,7 @@
 	(game (id ?gid))
 	(player (game ?gid) (sid ?sid) (seat ?seat))
 	(game-connection (game ?gid) (wsid ?wsid))
+	(dealer ?gid ~?seat)
 	?e <- (expected-trump-selector ?gid ?seat)
 	?p <- (parsed-message-from ?wsid trump no)
 	(not (trump-selection ?gid ?seat ?))
@@ -666,15 +689,15 @@
 		(expected-trump-selector ?gid ?np)))
 
 (defrule trump-selection-is-valid-suit
-	(player-to-the-left-of ?seat ?np)
 	(connection (sid ?sid) (wsid ?wsid))
 	(game (id ?gid))
 	(player (game ?gid) (sid ?sid) (seat ?seat))
 	(game-connection (game ?gid) (wsid ?wsid))
 	?a <- (all-pass ?gid ?suit)
 	?e <- (expected-trump-selector ?gid ?seat)
-	?p <- (parsed-message-from ?wsid trump ~?suit&~no&hearts|diamons|clubs|spades)
+	?p <- (parsed-message-from ?wsid trump
+		?choice&~?suit&~no&hearts|diamons|clubs|spades)
 	(not (trump-selection ?gid ?seat ?))
 	=>
 	(retract ?a ?e ?p)
-	(assert (trump-suit ?gid ?suit)))
+	(assert (trump-suit ?gid ?choice)))
