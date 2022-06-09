@@ -2,14 +2,12 @@
 	(slot game)
 	(slot seat)
 	(slot name)
-	(slot suit)
-	(slot choice (default 0)))
+	(slot suit))
 (deftemplate card-in-play
 	(slot game)
 	(slot seat)
 	(slot name)
-	(slot suit)
-	(slot choice (default 0)))
+	(slot suit))
 (deftemplate game
 	(slot id)
 	(slot started (default FALSE)))
@@ -349,6 +347,7 @@
 	(dealer ?id 1)
 	(dealt-round ?id 0)
 	(shuffled-deck ?id)
+	(next-trick ?id 1)
 	(unshuffled-deck ?id
 	 9 spades
 	 10 spades
@@ -701,3 +700,83 @@
 	=>
 	(retract ?a ?e ?p)
 	(assert (trump-suit ?gid ?choice)))
+
+(defrule initialize-trick
+	(player-to-the-left-of ?d ?np)
+	(game (id ?gid))
+	(dealer ?gid ?d)
+	(next-trick ?gid ?trick)
+	(trump-suit ?gid ?trump)
+	(not (leader-of-trick ?gid ?trick ?))
+	=>
+	(assert
+		(leader-of-trick ?gid ?trick ?np)
+		(expected-player ?gid ?np)))
+
+(defrule announce-expected-player
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(expected-player ?gid ?p)
+	=>
+	(format ?wsid "expectedplayer %d" ?p))
+
+(defrule play-out-of-turn
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid) (seat ?seat))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(expected-player ?gid ~?seat)
+	?p <- (parsed-message-from ?wsid play $?)
+	=>
+	(retract ?p)
+	(printout ?wsid "error ERROR: it is not your turn to play"))
+
+(defrule play-card-not-in-hand
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid) (seat ?seat))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(expected-player ?gid ?seat)
+	?p <- (parsed-message-from ?wsid play $? ?name ?suit)
+	(not (card-in-hand (game ?gid) (seat ?seat) (name ?name) (suit ?suit)))
+	=>
+	(retract ?p)
+	(printout ?wsid "error ERROR: that card is not in your hand"))
+
+(defrule play
+	(player-to-the-left-of ?seat ?np)
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid) (seat ?seat))
+	(game-connection (game ?gid) (wsid ?wsid))
+	?c <- (card-in-hand (game ?gid) (seat ?seat) (name ?name) (suit ?suit))
+	?e <- (expected-player ?gid ?seat)
+	?p <- (parsed-message-from ?wsid play $? ?name ?suit)
+	(not (card-in-play (game ?gid) (seat ?seat)))
+	=>
+	(retract ?c ?e ?p)
+	(send-directly-to-player ?gid ?seat (format nil "play %d %s %s" ?seat (sym-cat ?name) ?suit))
+	(broadcast-to-other-players ?gid ?seat (format nil "play %d" ?seat))
+	(assert
+		(card-in-play (game ?gid) (seat ?seat) (name ?name) (suit ?suit))
+		(expected-player ?gid ?np)))
+
+(defrule announce-leading-suit
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(player (game ?gid) (sid ?sid))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(leader-of-trick ?gid ?trick ?seat)
+	(card-in-play (game ?gid) (seat ?seat) (suit ?suit))
+	=>
+	(format ?wsid "leadingsuit %s" ?suit))
+
+(defrule announce-card-in-play
+	(connection (sid ?sid) (wsid ?wsid))
+	(game (id ?gid))
+	(game-connection (game ?gid) (wsid ?wsid))
+	(card-in-play (game ?gid) (seat ?seat) (suit ?suit) (name ?name))
+	=>
+	(format ?wsid "cardinplay %d %s %s" ?seat (sym-cat ?name) ?suit))
