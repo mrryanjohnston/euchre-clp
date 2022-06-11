@@ -119,10 +119,6 @@
 	(connection (sid ?sid) (wsid ?wsid))
 	(connection (sid ?ssid&~?sid) (wsid ?wwsid))
 	(game (id ?gid))
-	(or (player (game ?gid) (sid ?sid))
-	    (spectator (game ?gid) (sid ?sid)))
-	(or (player (game ?gid) (sid ?ssid))
-	    (spectator (game ?gid) (sid ?ssid)))
 	=>
 	(format ?wwsid "is %s %s" ?sid ?name))
 
@@ -347,7 +343,6 @@
 	(dealer ?id 1)
 	(dealt-round ?id 0)
 	(shuffled-deck ?id)
-	(next-trick ?id 1)
 	(unshuffled-deck ?id
 	 9 spades
 	 10 spades
@@ -537,16 +532,19 @@
 	(assert (bid ?gid ?seat pick-it-up)))
 
 (defrule pick-it-up
+	(team-member ?team ?seat)
+	(team-tricks-taken ?gid ?oteam&~?team ?)
 	(connection (sid ?sid) (wsid ?wsid))
 	(game (id ?gid))
-	(or (spectator (game ?gid) (sid ?sid))
-	    (player (game ?gid) (sid ?sid)))
 	(game-connection (game ?gid) (wsid ?wsid))
 	(kitty ?gid $? ?name ?suit)
 	(bid ?gid ?seat pick-it-up)
 	(not (trump-suit ?gid ?))
 	=>
-	(assert (trump-suit ?gid ?suit)))
+	(assert
+		(trump-suit ?gid ?suit)
+		(makers ?gid ?team)
+		(defenders ?gid ?oteam)))
 
 (defrule announce-trump-suit
 	(game-connection (game ?gid) (wsid ?wsid))
@@ -705,13 +703,10 @@
 	(player-to-the-left-of ?d ?np)
 	(game (id ?gid))
 	(dealer ?gid ?d)
-	(next-trick ?gid ?trick)
 	(trump-suit ?gid ?trump)
-	(not (leader-of-trick ?gid ?trick ?))
+	(not (expected-player ?gid ?))
 	=>
-	(assert
-		(leader-of-trick ?gid ?trick ?np)
-		(expected-player ?gid ?np)))
+	(assert (expected-player ?gid ?np)))
 
 (defrule announce-expected-player
 	(connection (sid ?sid) (wsid ?wsid))
@@ -764,11 +759,12 @@
 		(expected-player ?gid ?np)))
 
 (defrule announce-leading-suit
+	(player-to-the-left-of ?d ?seat)
 	(connection (sid ?sid) (wsid ?wsid))
 	(game (id ?gid))
+	(dealer ?gid ?d)
 	(player (game ?gid) (sid ?sid))
 	(game-connection (game ?gid) (wsid ?wsid))
-	(leader-of-trick ?gid ?trick ?seat)
 	(card-in-play (game ?gid) (seat ?seat) (suit ?suit))
 	=>
 	(format ?wsid "leadingsuit %s" ?suit))
@@ -780,3 +776,85 @@
 	(card-in-play (game ?gid) (seat ?seat) (suit ?suit) (name ?name))
 	=>
 	(format ?wsid "cardinplay %d %s %s" ?seat (sym-cat ?name) ?suit))
+
+(defrule trump-jack-wins
+	(trump-suit ?gid ?suit)
+	(card-in-play (game ?gid) (seat 1))
+	(card-in-play (game ?gid) (seat 2))
+	(card-in-play (game ?gid) (seat 3))
+	(card-in-play (game ?gid) (seat 4))
+	(card-in-play (game ?gid) (seat ?seat) (name jack) (suit ?suit))
+	=>
+	(assert (trick-winner ?gid ?seat)))
+
+(defrule opposite-jack-wins
+	(opposite-suit ?suit ?os)
+	(trump-suit ?gid ?suit)
+	(card-in-play (game ?gid) (seat 1))
+	(card-in-play (game ?gid) (seat 2))
+	(card-in-play (game ?gid) (seat 3))
+	(card-in-play (game ?gid) (seat 4))
+	(card-in-play (seat ?seat) (name jack) (suit ?os))
+	(not (card-in-play (name jack) (suit ?suit)))
+	=>
+	(assert (trick-winner ?gid ?seat)))
+
+(defrule highest-trump-wins
+	(card-value ?name ?value)
+	(opposite-suit ?s ?os)
+	(trump-suit ?gid ?s)
+	(card-in-play (game ?gid) (seat 1))
+	(card-in-play (game ?gid) (seat 2))
+	(card-in-play (game ?gid) (seat 3))
+	(card-in-play (game ?gid) (seat 4))
+	(card-in-play (game ?gid) (seat ?seat) (name ?name) (suit ?s))
+	(not (and
+		(card-value ?oname ?ovalue)
+		(card-in-play (game ?gid) (name ?oname&:(> ?ovalue ?value)) (suit ?s))))
+	(not (card-in-play (name jack) (suit ?os)))
+	(not (card-in-play (name jack) (suit ?s)))
+	=>
+	(assert (trick-winner ?gid ?seat)))
+
+(defrule highest-lead-wins
+        (player-to-the-left-of ?d ?p)
+	(card-value ?name ?value)
+	(opposite-suit ?s ?os)
+	(dealer ?gid ?d)
+	(trump-suit ?gid ?s)
+	(card-in-play (game ?gid) (seat 1))
+	(card-in-play (game ?gid) (seat 2))
+	(card-in-play (game ?gid) (seat 3))
+	(card-in-play (game ?gid) (seat 4))
+	(card-in-play (game ?gid) (seat ?p) (suit ?suit))
+	(card-in-play (game ?gid) (seat ?seat) (name ?name) (suit ?suit))
+	(not (and
+		(card-value ?oname ?ovalue)
+		(card-in-play (game ?gid) (name ?oname&:(> ?ovalue ?value)) (suit ?s))))
+	(not (card-in-play (name jack) (suit ?os)))
+	(not (card-in-play (suit ?s)))
+	=>
+	(assert (trick-winner ?gid ?seat)))
+
+(defrule trick-winner
+	(team-member ?team ?seat)
+	?f <- (team-tricks-taken ?gid ?team ?taken)
+	(team-tricks-taken ?gid ~?team ?otaken)
+	(trick-winner ?gid ?p)
+	(card-in-play (game ?gid) (seat ?seat) (name ?n) (suit ?s))
+	?c1 <- (card-in-play (game ?gid) (seat 1) (name ?n1) (suit ?s1))
+	?c2 <- (card-in-play (game ?gid) (seat 2) (name ?n2) (suit ?s2))
+	?c3 <- (card-in-play (game ?gid) (seat 3) (name ?n3) (suit ?s3))
+	?c4 <- (card-in-play (game ?gid) (seat 4) (name ?n4) (suit ?s4))
+	=>
+	(retract ?c1 ?c2 ?c3 ?c4 ?f)
+	(println "Player " ?p " takes trick " (+ ?taken ?otaken) " with " ?n " of " ?s "!")
+	(assert
+		(trick-cards ?gid (+ ?taken ?otaken) ?n1 ?s1 ?n2 ?s2 ?n3 ?s3 ?n4 ?s4)
+		(team-tricks-taken ?gid ?team (+ ?taken 1))))
+
+(defrule announce-team-tricks-taken
+	(game-connection (game ?gid) (wsid ?wsid))
+	(team-tricks-taken ?gid ?team ?taken)
+	=>
+	(format ?wsid "teamtrickstaken %d %d" ?team ?taken))
