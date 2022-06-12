@@ -837,11 +837,11 @@
 	(assert (trick-winner ?gid ?seat)))
 
 (defrule trick-winner
-	(team-member ?team ?seat)
+	(team-member ?team ?p)
 	?f <- (team-tricks-taken ?gid ?team ?taken)
 	(team-tricks-taken ?gid ~?team ?otaken)
 	(trick-winner ?gid ?p)
-	(card-in-play (game ?gid) (seat ?seat) (name ?n) (suit ?s))
+	(card-in-play (game ?gid) (seat ?p) (name ?n) (suit ?s))
 	?c1 <- (card-in-play (game ?gid) (seat 1) (name ?n1) (suit ?s1))
 	?c2 <- (card-in-play (game ?gid) (seat 2) (name ?n2) (suit ?s2))
 	?c3 <- (card-in-play (game ?gid) (seat 3) (name ?n3) (suit ?s3))

@@ -29,12 +29,16 @@ var addr = flag.String("addr", "0.0.0.0:8765", "websocket address")
 var upgrader = websocket.Upgrader{}
 var store = sessions.NewCookieStore([]byte("euchre-development"))
 var websockets = make(map[string]*Conn)
-var websocketMessageChannel = make(chan string)
+var websocketMessageChannel = make(chan *Msg)
 var websocketDisconnectionsChannel = make(chan string)
 var websocketConnectionsChannel = make(chan []string)
 type Conn struct {
 	b []byte
 	c *websocket.Conn
+}
+type Msg struct {
+	m []byte
+	u string
 }
 //export NewUuid
 func NewUuid(env *C.Environment, udfc *C.UDFContext, out *C.UDFValue) {
@@ -77,9 +81,7 @@ func Websocket(w http.ResponseWriter, r *http.Request) {
 			log.Println("INFO: error reading message:", err)
 			break
 		}
-		websocket.b = append(websocket.b, message...)
-		websocket.b = append(websocket.b, byte('\n'))
-		websocketMessageChannel <- websocketId
+		websocketMessageChannel <- &Msg{append(message, byte('\n')), websocketId}
 	}
 }
 func WebsocketDisconnection(id string) {
@@ -93,9 +95,10 @@ func StartRulesEngine() {
 	C.BatchStar(env, c_f)
 	for {
 		select {
-		case wsid := <-websocketMessageChannel:
-			log.Printf("INFO: message buffered from websocket id %s", wsid)
-			AssertString(env, fmt.Sprintf("(received-message-from %s)", wsid))
+		case msg := <-websocketMessageChannel:
+			log.Printf("INFO: message buffered from websocket id %s", msg.u)
+			AssertString(env, fmt.Sprintf("(received-message-from %s)", msg.u))
+			websockets[msg.u].b = append(websockets[msg.u].b, msg.m...)
 		case uid_wsid := <-websocketConnectionsChannel:
 			Connect(env, uid_wsid[0], uid_wsid[1])
 		case wsid := <-websocketDisconnectionsChannel:
