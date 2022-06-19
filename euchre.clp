@@ -848,7 +848,11 @@
 	?c4 <- (card-in-play (game ?gid) (seat 4) (name ?n4) (suit ?s4))
 	=>
 	(retract ?c1 ?c2 ?c3 ?c4 ?f)
-	(println "Player " ?p " takes trick " (+ ?taken ?otaken) " with " ?n " of " ?s "!")
+	(broadcast ?gid (format nil "tricktaken %d %d" ?p (+ 1 ?taken ?otaken)))
+	(broadcast ?gid (format nil "cardleavesplay 1"))
+	(broadcast ?gid (format nil "cardleavesplay 2"))
+	(broadcast ?gid (format nil "cardleavesplay 3"))
+	(broadcast ?gid (format nil "cardleavesplay 4"))
 	(assert
 		(trick-cards ?gid (+ ?taken ?otaken) ?n1 ?s1 ?n2 ?s2 ?n3 ?s3 ?n4 ?s4)
 		(team-tricks-taken ?gid ?team (+ ?taken 1))))
