@@ -1,3 +1,22 @@
+(defrule more-in-buffer
+	(declare (salience -1))
+	?f <- (buffer-empty ?wsid false)
+	(not (buffer-empty ?wsid true))
+	=>
+	(assert (received-message-from ?wsid))
+	(retract ?f))
+(defrule buffer-empty-possible-empty-message
+	(declare (salience -1))
+	?t <- (buffer-empty ?wsid true)
+	(not (buffer-empty ?wsid false))
+	=>
+	(retract ?t))
+(defrule buffer-emptied
+	(declare (salience -1))
+	?t <- (buffer-empty ?wsid true)
+	?f <- (buffer-empty ?wsid false)
+	=>
+	(retract ?f ?t))
 (deftemplate card-in-hand
 	(slot game)
 	(slot seat)
@@ -465,7 +484,7 @@
 	(player (game ?gid) (seat ?p) (sid ?sid))
 	(game-connection (game ?gid) (wsid ?wsid))
 	(not (expected-bidder ?gid ?))
-	(not (trump-suit ?gid ?))
+	(not (trump-suit ?gid ? ?))
 	=>
 	(assert (expected-bidder ?gid ?p))
 	(printout ?wsid "bid"))
@@ -478,7 +497,7 @@
 	(expected-bidder ?gid ?p)
 	(not (bid ?gid ?p ?))
 	(not (all-pass ?gid ?))
-	(not (trump-suit ?gid ?))
+	(not (trump-suit ?gid ? ?))
 	=>
 	(format ?wsid "bidder %d" ?p))
 
@@ -539,37 +558,55 @@
 	(game-connection (game ?gid) (wsid ?wsid))
 	(kitty ?gid $? ?name ?suit)
 	(bid ?gid ?seat pick-it-up)
-	(not (trump-suit ?gid ?))
+	(not (trump-suit ?gid ? ?))
 	=>
 	(assert
-		(trump-suit ?gid ?suit)
+		(trump-suit ?gid ?team ?suit)
 		(makers ?gid ?team)
 		(defenders ?gid ?oteam)))
 
 (defrule announce-trump-suit
 	(game-connection (game ?gid) (wsid ?wsid))
-	(trump-suit ?gid ?suit)
+	(trump-suit ?gid ?team ?suit)
 	=>
 	(format ?wsid "trump %s" ?suit))
+
+(defrule inform-maker
+	(connection (sid ?sid) (wsid ?wsid))
+	(team-member ?team ?seat)
+	(game-connection (game ?gid) (wsid ?wsid))
+	(trump-suit ?gid ?team ?suit)
+	(player (sid ?sid) (seat ?seat))
+	=>
+	(printout ?wsid "role makers"))
+
+(defrule inform-defender
+	(connection (sid ?sid) (wsid ?wsid))
+	(team-member ?team ?seat)
+	(game-connection (game ?gid) (wsid ?wsid))
+	(trump-suit ?gid ~?team ?suit)
+	(player (sid ?sid) (seat ?seat))
+	=>
+	(printout ?wsid "role defenders"))
 
 (defrule clean-up-bid-facts-after-trump-chosen
 	(game (id ?gid))
 	?b <- (bid ?gid ? ?)
-	(trump-suit ?gid ?)
+	(trump-suit ?gid ? ?)
 	=>
 	(retract ?b))
 
 (defrule clean-up-expected-bidder-facts-after-trump-chosen
 	(game (id ?gid))
 	?e <- (expected-bidder ?gid ?)
-	(trump-suit ?gid ?)
+	(trump-suit ?gid ? ?)
 	=>
 	(retract ?e))
 
 (defrule clean-up-expected-trump-selector-facts-after-trump-chosen
 	(game (id ?gid))
 	?e <- (expected-trump-selector ?gid ?p)
-	(trump-suit ?gid ?)
+	(trump-suit ?gid ? ?)
 	=>
 	(retract ?e))
 
@@ -598,7 +635,7 @@
 	(game-connection (game ?gid) (wsid ?wsid))
 	(all-pass ?gid ?suit)
 	(not (expected-trump-selector ?gid ?))
-	(not (trump-suit ?gid ?))
+	(not (trump-suit ?gid ? ?))
 	=>
 	(assert (expected-trump-selector ?gid ?p))
 	(format ?wsid "allpass %s" ?suit)
@@ -686,6 +723,7 @@
 		(expected-trump-selector ?gid ?np)))
 
 (defrule trump-selection-is-valid-suit
+	(team-member ?team ?seat)
 	(connection (sid ?sid) (wsid ?wsid))
 	(game (id ?gid))
 	(player (game ?gid) (sid ?sid) (seat ?seat))
@@ -694,16 +732,16 @@
 	?e <- (expected-trump-selector ?gid ?seat)
 	?p <- (parsed-message-from ?wsid trump
 		?choice&~?suit&~no&hearts|diamons|clubs|spades)
-	(not (trump-selection ?gid ?seat ?))
+	(not (trump-suit ?gid ? ?))
 	=>
 	(retract ?a ?e ?p)
-	(assert (trump-suit ?gid ?choice)))
+	(assert (trump-suit ?gid ?team ?choice)))
 
 (defrule initialize-trick
 	(player-to-the-left-of ?d ?np)
 	(game (id ?gid))
 	(dealer ?gid ?d)
-	(trump-suit ?gid ?trump)
+	(trump-suit ?gid ? ?trump)
 	(not (expected-player ?gid ?))
 	=>
 	(assert (expected-player ?gid ?np)))
@@ -778,7 +816,7 @@
 	(format ?wsid "cardinplay %d %s %s" ?seat (sym-cat ?name) ?suit))
 
 (defrule trump-jack-wins
-	(trump-suit ?gid ?suit)
+	(trump-suit ?gid ? ?suit)
 	(card-in-play (game ?gid) (seat 1))
 	(card-in-play (game ?gid) (seat 2))
 	(card-in-play (game ?gid) (seat 3))
@@ -789,7 +827,7 @@
 
 (defrule opposite-jack-wins
 	(opposite-suit ?suit ?os)
-	(trump-suit ?gid ?suit)
+	(trump-suit ?gid ? ?suit)
 	(card-in-play (game ?gid) (seat 1))
 	(card-in-play (game ?gid) (seat 2))
 	(card-in-play (game ?gid) (seat 3))
@@ -802,7 +840,7 @@
 (defrule highest-trump-wins
 	(card-value ?name ?value)
 	(opposite-suit ?s ?os)
-	(trump-suit ?gid ?s)
+	(trump-suit ?gid ? ?s)
 	(card-in-play (game ?gid) (seat 1))
 	(card-in-play (game ?gid) (seat 2))
 	(card-in-play (game ?gid) (seat 3))
@@ -821,7 +859,7 @@
 	(card-value ?name ?value)
 	(opposite-suit ?s ?os)
 	(dealer ?gid ?d)
-	(trump-suit ?gid ?s)
+	(trump-suit ?gid ? ?s)
 	(card-in-play (game ?gid) (seat 1))
 	(card-in-play (game ?gid) (seat 2))
 	(card-in-play (game ?gid) (seat 3))
@@ -862,3 +900,73 @@
 	(team-tricks-taken ?gid ?team ?taken)
 	=>
 	(format ?wsid "teamtrickstaken %d %d" ?team ?taken))
+
+(defrule makers-low
+	?taken <- (team-tricks-taken ?gid ?team ?tricks&3|4)
+	?other <- (team-tricks-taken ?gid ?oteam&~?team ?)
+	?f <- (team-score ?gid ?team ?score)
+	(dealt-round ?gid ?dealt)
+	(trump-suit ?gid ?team ?)
+	(not (card-in-hand))
+	=>
+	(retract ?f ?taken ?other)
+	(println "Makers take " ?tricks " tricks and win 1 point")
+	(assert
+		(scored-round ?gid ?dealt)
+		(team-tricks-taken ?gid ?team 0)
+		(team-tricks-taken ?gid ?oteam 0)
+		(team-score ?gid ?team (+ ?score 1))))
+
+(defrule makers-high
+	?taken <- (team-tricks-taken ?gid ?team 5)
+	?other <- (team-tricks-taken ?gid ?oteam&~?team ?)
+	?f <- (team-score ?gid ?team ?score)
+	(dealt-round ?gid ?dealt)
+	(trump-suit ?gid ?team ?)
+	(not (card-in-hand))
+	=>
+	(retract ?f ?taken ?other)
+	(println "Makers take 5 tricks and win 2 points")
+	(assert
+		(scored-round ?gid ?dealt)
+		(team-tricks-taken ?gid ?team 0)
+		(team-tricks-taken ?gid ?oteam 0)
+		(team-score ?gid ?team (+ ?score 2))))
+
+(defrule defenders
+	?taken <- (team-tricks-taken ?gid ?team ?tricks&3|4|5)
+	?other <- (team-tricks-taken ?gid ?oteam&~?team ?)
+	?f <- (team-score ?gid ?team ?score)
+	(dealt-round ?gid ?dealt)
+	(trump-suit ?gid ?oteam ?)
+	=>
+	(retract ?f ?taken ?other)
+	(println "Defenders take " ?tricks " tricks and win 2 points")
+	(assert
+		(scored-round ?gid ?dealt)
+		(team-tricks-taken ?gid ?team 0)
+		(team-tricks-taken ?gid ?oteam 0)
+		(team-score ?gid ?team (+ ?score 2))))
+
+(defrule reshuffle
+	(player-to-the-left-of ?dealer ?nd)
+	?d <- (dealer ?gid ?dealer)
+	(dealt-round ?gid ?dealt)
+	(scored-round ?gid ?dealt)
+	?k <- (kitty ?gid $?)
+	?s <- (shuffled-deck  ?gid $?cards)
+	?u <- (unshuffled-deck ?gid)
+	(not (team-score ?gid ? ?score&:(>= ?score 10)))
+	=>
+	(retract ?d ?k ?s ?u)
+	(assert
+		(dealer ?nd)
+		(shuffled-deck)
+		(unshuffled-deck ?cards)))
+
+(defrule declare-winner
+	(dealt-round ?gid ?dealt)
+	(scored-round ?gid ?dealt)
+	(team-score ?gid ?team ?score&:(>= ?score 10))
+	=>
+	(assert (winner ?gid ?team)))

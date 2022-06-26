@@ -136,9 +136,11 @@ func WriteWsCallback(e *C.Environment, logicalName *C.cchar_t, str *C.cchar_t, c
 }
 //export ReadWsCallback
 func ReadWsCallback(e *C.Environment, logicalName *C.cchar_t, context unsafe.Pointer) C.int {
-	w := websockets[C.GoString(logicalName)]
+	wsid := C.GoString(logicalName)
+	w := websockets[wsid]
 	ch := w.b[0]
 	w.b = w.b[1:]
+	AssertString(e, fmt.Sprintf("(buffer-empty %s %t)", wsid, len(w.b) == 0));
 	return C.int(ch)
 }
 //export UnreadWsCallback
