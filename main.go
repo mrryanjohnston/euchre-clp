@@ -32,7 +32,7 @@ var websockets = make(map[string]*websocket.Conn)
 var websocketMessageChannel = make(chan *Msg)
 var websocketDisconnectionsChannel = make(chan string)
 var websocketConnectionsChannel = make(chan []string)
-var buffer = make([]byte, 0)
+var buffer []byte
 type Msg struct {
 	m []byte
 	u string
@@ -94,7 +94,7 @@ func StartRulesEngine() {
 		case msg := <-websocketMessageChannel:
 			log.Printf("INFO: message buffered from websocket id %s", msg.u)
 			AssertString(env, fmt.Sprintf("(received-message-from %s)", msg.u))
-			buffer = append(buffer, msg.m...)
+			buffer = msg.m
 		case uid_wsid := <-websocketConnectionsChannel:
 			Connect(env, uid_wsid[0], uid_wsid[1])
 		case wsid := <-websocketDisconnectionsChannel:
