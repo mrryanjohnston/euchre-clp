@@ -28,14 +28,11 @@ import "C"
 var addr = flag.String("addr", "0.0.0.0:8765", "websocket address")
 var upgrader = websocket.Upgrader{}
 var store = sessions.NewCookieStore([]byte("euchre-development"))
-var websockets = make(map[string]*Conn)
+var websockets = make(map[string]*websocket.Conn)
 var websocketMessageChannel = make(chan *Msg)
 var websocketDisconnectionsChannel = make(chan string)
 var websocketConnectionsChannel = make(chan []string)
-type Conn struct {
-	b []byte
-	c *websocket.Conn
-}
+var buffer = make([]byte, 0)
 type Msg struct {
 	m []byte
 	u string
@@ -70,8 +67,7 @@ func Websocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	websocketId := uuid.NewString()
-	websocket := Conn{[]byte{}, c}
-	websockets[websocketId] = &websocket
+	websockets[websocketId] = c
 	websocketConnectionsChannel <- []string{userId, websocketId}
 	defer WebsocketDisconnection(websocketId)
 
@@ -98,7 +94,7 @@ func StartRulesEngine() {
 		case msg := <-websocketMessageChannel:
 			log.Printf("INFO: message buffered from websocket id %s", msg.u)
 			AssertString(env, fmt.Sprintf("(received-message-from %s)", msg.u))
-			websockets[msg.u].b = append(websockets[msg.u].b, msg.m...)
+			buffer = append(buffer, msg.m...)
 		case uid_wsid := <-websocketConnectionsChannel:
 			Connect(env, uid_wsid[0], uid_wsid[1])
 		case wsid := <-websocketDisconnectionsChannel:
@@ -132,21 +128,19 @@ func QueryWsCallback(e *C.Environment, logicalName *C.cchar_t, _ unsafe.Pointer)
 }
 //export WriteWsCallback
 func WriteWsCallback(e *C.Environment, logicalName *C.cchar_t, str *C.cchar_t, context unsafe.Pointer) {
-	websockets[C.GoString(logicalName)].c.WriteMessage(1, []byte(C.GoString(str)))
+	websockets[C.GoString(logicalName)].WriteMessage(1, []byte(C.GoString(str)))
 }
 //export ReadWsCallback
 func ReadWsCallback(e *C.Environment, logicalName *C.cchar_t, context unsafe.Pointer) C.int {
 	wsid := C.GoString(logicalName)
-	w := websockets[wsid]
-	ch := w.b[0]
-	w.b = w.b[1:]
-	AssertString(e, fmt.Sprintf("(buffer-empty %s %t)", wsid, len(w.b) == 0));
+	ch := buffer[0]
+	buffer = buffer[1:]
+	AssertString(e, fmt.Sprintf("(buffer-empty %s %t)", wsid, len(buffer) == 0));
 	return C.int(ch)
 }
 //export UnreadWsCallback
 func UnreadWsCallback(e *C.Environment, logicalName *C.cchar_t, ch C.int, context unsafe.Pointer) C.int {
-	w := websockets[C.GoString(logicalName)]
-	w.b = append(w.b, byte(ch))
+	buffer = append(buffer, byte(ch))
 	return C.int(ch)
 }
 //export ExitWsCallback
