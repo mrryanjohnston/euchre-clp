@@ -361,6 +361,7 @@
 	(team-tricks-taken ?id 2 0)
 	(dealer ?id 1)
 	(dealt-round ?id 0)
+	(scored-round ?id 0)
 	(shuffled-deck ?id)
 	(unshuffled-deck ?id
 	 9 spades
@@ -441,14 +442,14 @@
 
 (defrule done-dealing
 	(game (id ?gid))
-	?d <- (dealt-round ?gid ?dealt)
+	?d <- (dealt-round ?gid ?round)
 	?l <- (last-dealt ?gid ?)
 	(unshuffled-deck ?gid $?cards&:(= (length$ ?cards) 8))
 	=>
 	(retract ?d ?l)
 	(assert
 		(kitty ?gid)
-		(dealt-round ?gid (+ ?dealt 1))))
+		(dealt-round ?gid (+ ?round 1))))
 
 (defrule kitty
 	(game (id ?gid))
@@ -738,10 +739,13 @@
 	(assert (trump-suit ?gid ?team ?choice)))
 
 (defrule initialize-trick
+	(team-member ?makers ?seat)
 	(player-to-the-left-of ?d ?np)
 	(game (id ?gid))
 	(dealer ?gid ?d)
-	(trump-suit ?gid ? ?trump)
+	(trump-suit ?gid ?seat ?trump)
+	(card-in-hand (game ?gid))
+	(not (team-tricks-taken ?gid ~?makers 3))
 	(not (expected-player ?gid ?))
 	=>
 	(assert (expected-player ?gid ?np)))
@@ -751,6 +755,7 @@
 	(game (id ?gid))
 	(player (game ?gid) (sid ?sid))
 	(game-connection (game ?gid) (wsid ?wsid))
+	(trump-suit ?gid ?makers ?trump)
 	(expected-player ?gid ?p)
 	=>
 	(format ?wsid "expectedplayer %d" ?p))
@@ -901,15 +906,22 @@
 	=>
 	(format ?wsid "teamtrickstaken %d %d" ?team ?taken))
 
+(defrule announce-team-score
+	(game-connection (game ?gid) (wsid ?wsid))
+	(team-score ?gid ?team ?score)
+	=>
+	(format ?wsid "teamscore %d %d" ?team ?score))
+
 (defrule makers-low
 	?taken <- (team-tricks-taken ?gid ?team ?tricks&3|4)
 	?other <- (team-tricks-taken ?gid ?oteam&~?team ?)
 	?f <- (team-score ?gid ?team ?score)
 	(dealt-round ?gid ?dealt)
+	?r <- (scored-round ?gid ?round&:(= ?round (- ?dealt 1)))
 	(trump-suit ?gid ?team ?)
 	(not (card-in-hand))
 	=>
-	(retract ?f ?taken ?other)
+	(retract ?f ?r ?taken ?other)
 	(println "Makers take " ?tricks " tricks and win 1 point")
 	(assert
 		(scored-round ?gid ?dealt)
@@ -922,10 +934,11 @@
 	?other <- (team-tricks-taken ?gid ?oteam&~?team ?)
 	?f <- (team-score ?gid ?team ?score)
 	(dealt-round ?gid ?dealt)
+	?r <- (scored-round ?gid ?round&:(= ?round (- ?dealt 1)))
 	(trump-suit ?gid ?team ?)
 	(not (card-in-hand))
 	=>
-	(retract ?f ?taken ?other)
+	(retract ?f ?r ?taken ?other)
 	(println "Makers take 5 tricks and win 2 points")
 	(assert
 		(scored-round ?gid ?dealt)
@@ -933,15 +946,25 @@
 		(team-tricks-taken ?gid ?oteam 0)
 		(team-score ?gid ?team (+ ?score 2))))
 
+(defrule clear-hand-when-defenders-take-3-tricks
+	?taken <- (team-tricks-taken ?gid ?team 3)
+	?c <- (card-in-hand (game ?gid) (seat ?seat) (suit ?suit) (name ?name))
+	=>
+	(retract ?c)
+	(send-directly-to-player ?gid ?seat (format nil "play %d %s %s" ?seat (sym-cat ?name) ?suit))
+	(broadcast-to-other-players ?gid ?seat (format nil "play %d" ?seat)))
+
 (defrule defenders
-	?taken <- (team-tricks-taken ?gid ?team ?tricks&3|4|5)
+	?taken <- (team-tricks-taken ?gid ?team 3)
 	?other <- (team-tricks-taken ?gid ?oteam&~?team ?)
 	?f <- (team-score ?gid ?team ?score)
 	(dealt-round ?gid ?dealt)
+	?r <- (scored-round ?gid ?round&:(= ?round (- ?dealt 1)))
 	(trump-suit ?gid ?oteam ?)
+	(not (card-in-hand (game ?gid)))
 	=>
-	(retract ?f ?taken ?other)
-	(println "Defenders take " ?tricks " tricks and win 2 points")
+	(retract ?f ?r ?taken ?other)
+	(println "Defenders take 3 tricks and win 2 points")
 	(assert
 		(scored-round ?gid ?dealt)
 		(team-tricks-taken ?gid ?team 0)
@@ -951,18 +974,21 @@
 (defrule reshuffle
 	(player-to-the-left-of ?dealer ?nd)
 	?d <- (dealer ?gid ?dealer)
+	?e <- (expected-player ?gid ?p)
 	(dealt-round ?gid ?dealt)
 	(scored-round ?gid ?dealt)
 	?k <- (kitty ?gid $?)
 	?s <- (shuffled-deck  ?gid $?cards)
 	?u <- (unshuffled-deck ?gid)
+	?t <- (trump-suit ?gid ?oteam ?)
 	(not (team-score ?gid ? ?score&:(>= ?score 10)))
+	(not (card-in-hand (game ?gid)))
 	=>
-	(retract ?d ?k ?s ?u)
+	(retract ?d ?e ?k ?s ?t ?u)
 	(assert
-		(dealer ?nd)
-		(shuffled-deck)
-		(unshuffled-deck ?cards)))
+		(dealer ?gid ?nd)
+		(shuffled-deck ?gid)
+		(unshuffled-deck ?gid ?cards)))
 
 (defrule declare-winner
 	(dealt-round ?gid ?dealt)
