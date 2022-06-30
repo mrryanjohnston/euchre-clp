@@ -947,7 +947,8 @@
 		(team-score ?gid ?team (+ ?score 2))))
 
 (defrule clear-hand-when-defenders-take-3-tricks
-	?taken <- (team-tricks-taken ?gid ?team 3)
+	(trump-suit ?gid ?team ?)
+	?taken <- (team-tricks-taken ?gid ~?team 3)
 	?c <- (card-in-hand (game ?gid) (seat ?seat) (suit ?suit) (name ?name))
 	=>
 	(retract ?c)
