@@ -140,7 +140,7 @@ func QueryWsCallback(e *C.Environment, logicalName *C.cchar_t, _ unsafe.Pointer)
 //export WriteWsCallback
 func WriteWsCallback(e *C.Environment, logicalName *C.cchar_t, str *C.cchar_t, context unsafe.Pointer) {
 	if err := websockets[C.GoString(logicalName)].WriteMessage(1, []byte(C.GoString(str))); err != nil {
-		log.Printf("WARNING: attempting to send message to socket %s errored: %s", err, C.GoString(logicalName))
+		log.Printf("WARNING: attempting to send message to socket %s errored: %s", C.GoString(logicalName), err)
 	}
 }
 
