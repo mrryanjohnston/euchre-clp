@@ -3,13 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/google/uuid"
+	"github.com/gorilla/sessions"
+	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
 	"unsafe"
-	"github.com/gorilla/websocket"
-	"github.com/gorilla/sessions"
-	"github.com/google/uuid"
 )
+
 /*
 #cgo CFLAGS: -std=c99 -O3 -fno-strict-aliasing
 #cgo LDFLAGS: -lm
@@ -33,16 +34,19 @@ var websocketMessageChannel = make(chan *Msg)
 var websocketDisconnectionsChannel = make(chan string)
 var websocketConnectionsChannel = make(chan []string)
 var buffer []byte
+
 type Msg struct {
 	m []byte
 	u string
 }
+
 //export NewUuid
 func NewUuid(env *C.Environment, udfc *C.UDFContext, out *C.UDFValue) {
 	c_newUuid := C.CString(uuid.NewString())
 	defer C.free(unsafe.Pointer(c_newUuid))
 	C.SetSymbolUDFValue(env, out, c_newUuid)
 }
+
 func Websocket(w http.ResponseWriter, r *http.Request) {
 	s, err := store.Get(r, "euchre-session")
 	if err != nil {
@@ -58,7 +62,7 @@ func Websocket(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Print("INFO: generated new id for session: ", s.Values["ID"])
 	}
-	userId := s.Values["ID"].(string)
+	sessionId := s.Values["ID"].(string)
 	c, err := upgrader.Upgrade(w, r, w.Header())
 	defer c.Close()
 	if err != nil {
@@ -68,7 +72,7 @@ func Websocket(w http.ResponseWriter, r *http.Request) {
 
 	websocketId := uuid.NewString()
 	websockets[websocketId] = c
-	websocketConnectionsChannel <- []string{userId, websocketId}
+	websocketConnectionsChannel <- []string{sessionId, websocketId}
 	defer WebsocketDisconnection(websocketId)
 
 	for {
@@ -80,9 +84,11 @@ func Websocket(w http.ResponseWriter, r *http.Request) {
 		websocketMessageChannel <- &Msg{append(message, byte('\n')), websocketId}
 	}
 }
+
 func WebsocketDisconnection(id string) {
 	websocketDisconnectionsChannel <- id
 }
+
 func StartRulesEngine() {
 	env := C.CreateEnvironment()
 	defer C.DestroyEnvironment(env)
@@ -95,24 +101,27 @@ func StartRulesEngine() {
 			log.Printf("INFO: message buffered from websocket id %s", msg.u)
 			AssertString(env, fmt.Sprintf("(received-message-from %s)", msg.u))
 			buffer = msg.m
-		case uid_wsid := <-websocketConnectionsChannel:
-			Connect(env, uid_wsid[0], uid_wsid[1])
+		case sid_wsid := <-websocketConnectionsChannel:
+			Connect(env, sid_wsid[0], sid_wsid[1])
 		case wsid := <-websocketDisconnectionsChannel:
 			Disconnect(env, wsid)
 		}
 		C.Run(env, -1)
 	}
 }
+
 func AssertString(e *C.Environment, fact string) {
 	fact_c := C.CString(fact)
 	defer C.free(unsafe.Pointer(fact_c))
 	C.AssertString(e, fact_c)
 }
-func Connect(e *C.Environment, uid string, wsid string) {
+
+func Connect(e *C.Environment, sid string, wsid string) {
 	CreateRouterForWebsocketConnection(e, wsid)
-	id_fact := fmt.Sprintf( "(connection (sid %s) (wsid %s))", uid, wsid)
+	id_fact := fmt.Sprintf("(connection (sid %s) (wsid %s))", sid, wsid)
 	AssertString(e, id_fact)
 }
+
 func Disconnect(e *C.Environment, wsid string) {
 	dc_fact := fmt.Sprintf("(disconnection %s)", wsid)
 	AssertString(e, dc_fact)
@@ -121,30 +130,38 @@ func Disconnect(e *C.Environment, wsid string) {
 	C.DeleteRouter(e, id_c)
 	delete(websockets, wsid)
 }
+
 //export QueryWsCallback
 func QueryWsCallback(e *C.Environment, logicalName *C.cchar_t, _ unsafe.Pointer) C.bool {
 	_, ok := websockets[C.GoString(logicalName)]
 	return C.bool(ok)
 }
+
 //export WriteWsCallback
 func WriteWsCallback(e *C.Environment, logicalName *C.cchar_t, str *C.cchar_t, context unsafe.Pointer) {
-	websockets[C.GoString(logicalName)].WriteMessage(1, []byte(C.GoString(str)))
+	if err := websockets[C.GoString(logicalName)].WriteMessage(1, []byte(C.GoString(str))); err != nil {
+		log.Printf("WARNING: attempting to send message to socket %s errored: %s", err, C.GoString(logicalName))
+	}
 }
+
 //export ReadWsCallback
 func ReadWsCallback(e *C.Environment, logicalName *C.cchar_t, context unsafe.Pointer) C.int {
 	wsid := C.GoString(logicalName)
 	ch := buffer[0]
 	buffer = buffer[1:]
-	AssertString(e, fmt.Sprintf("(buffer-empty %s %t)", wsid, len(buffer) == 0));
+	AssertString(e, fmt.Sprintf("(buffer-empty %s %t)", wsid, len(buffer) == 0))
 	return C.int(ch)
 }
+
 //export UnreadWsCallback
 func UnreadWsCallback(e *C.Environment, logicalName *C.cchar_t, ch C.int, context unsafe.Pointer) C.int {
 	buffer = append(buffer, byte(ch))
 	return C.int(ch)
 }
+
 //export ExitWsCallback
 func ExitWsCallback(e *C.Environment, exitCode C.int, context unsafe.Pointer) {}
+
 func CreateRouterForWebsocketConnection(e *C.Environment, id string) {
 	id_c := C.CString(id)
 	defer C.free(unsafe.Pointer(id_c))
@@ -157,6 +174,7 @@ func CreateRouterForWebsocketConnection(e *C.Environment, id string) {
 		(*C.RouterExitFunction)((unsafe.Pointer)(C.ExitWsCallback)),
 		nil)
 }
+
 func main() {
 	flag.Parse()
 	http.HandleFunc("/websocket", Websocket)

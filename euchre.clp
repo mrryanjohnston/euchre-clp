@@ -936,7 +936,7 @@
 	(dealt-round ?gid ?dealt)
 	?r <- (scored-round ?gid ?round&:(= ?round (- ?dealt 1)))
 	(trump-suit ?gid ?team ?)
-	(not (card-in-hand) (game ?gid))
+	(not (card-in-hand (game ?gid)))
 	=>
 	(retract ?f ?r ?taken ?other)
 	(println "Makers take 5 tricks and win 2 points")
