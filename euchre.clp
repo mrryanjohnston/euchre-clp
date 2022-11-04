@@ -1,22 +1,3 @@
-(defrule more-in-buffer
-	(declare (salience -1))
-	?f <- (buffer-empty ?wsid false)
-	(not (buffer-empty ?wsid true))
-	=>
-	(assert (received-message-from ?wsid))
-	(retract ?f))
-(defrule buffer-empty-possible-empty-message
-	(declare (salience -1))
-	?t <- (buffer-empty ?wsid true)
-	(not (buffer-empty ?wsid false))
-	=>
-	(retract ?t))
-(defrule buffer-emptied
-	(declare (salience -1))
-	?t <- (buffer-empty ?wsid true)
-	?f <- (buffer-empty ?wsid false)
-	=>
-	(retract ?f ?t))
 (deftemplate card-in-hand
 	(slot game)
 	(slot seat)

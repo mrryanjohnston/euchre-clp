@@ -29,15 +29,16 @@ import "C"
 var addr = flag.String("addr", "0.0.0.0:8765", "websocket address")
 var upgrader = websocket.Upgrader{}
 var store = sessions.NewCookieStore([]byte("euchre-development"))
-var websockets = make(map[string]*websocket.Conn)
-var websocketMessageChannel = make(chan *Msg)
+var websockets = make(map[string]*Conn)
+var websocketMessageBufferedChannel = make(chan string)
 var websocketDisconnectionsChannel = make(chan string)
 var websocketConnectionsChannel = make(chan []string)
-var buffer []byte
 
-type Msg struct {
-	m []byte
-	u string
+type Conn struct {
+	b  []byte
+	rc chan []byte
+	wc chan []byte
+	w  *websocket.Conn
 }
 
 //export NewUuid
@@ -71,7 +72,9 @@ func Websocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	websocketId := uuid.NewString()
-	websockets[websocketId] = c
+	websocketReadChan := make(chan []byte, 1)
+	websocketWriteChan := make(chan []byte)
+	websockets[websocketId] = &Conn{[]byte{}, websocketReadChan, websocketWriteChan, c}
 	websocketConnectionsChannel <- []string{sessionId, websocketId}
 	defer WebsocketDisconnection(websocketId)
 
@@ -81,11 +84,14 @@ func Websocket(w http.ResponseWriter, r *http.Request) {
 			log.Println("INFO: error reading message:", err)
 			break
 		}
-		websocketMessageChannel <- &Msg{append(message, byte('\n')), websocketId}
+		log.Printf("INFO: received message from user %s on websocket %s", sessionId, websocketId)
+		websocketReadChan <- append(message, byte('\n'))
+		websocketMessageBufferedChannel <- websocketId
 	}
 }
 
 func WebsocketDisconnection(id string) {
+	log.Printf("INFO: websocket %s disconnected", id)
 	websocketDisconnectionsChannel <- id
 }
 
@@ -97,13 +103,14 @@ func StartRulesEngine() {
 	C.BatchStar(env, c_f)
 	for {
 		select {
-		case msg := <-websocketMessageChannel:
-			log.Printf("INFO: message buffered from websocket id %s", msg.u)
-			AssertString(env, fmt.Sprintf("(received-message-from %s)", msg.u))
-			buffer = msg.m
+		case wsid := <-websocketMessageBufferedChannel:
+			log.Printf("INFO: telling CLIPS about buffered message from websocket id %s", wsid)
+			AssertString(env, fmt.Sprintf("(received-message-from %s)", wsid))
 		case sid_wsid := <-websocketConnectionsChannel:
+			log.Printf("INFO: telling CLIPS about user %s connection on websocket id %s", sid_wsid[0], sid_wsid[1])
 			Connect(env, sid_wsid[0], sid_wsid[1])
 		case wsid := <-websocketDisconnectionsChannel:
+			log.Printf("INFO: telling CLIPS about user disconnect from websocket id %s", wsid)
 			Disconnect(env, wsid)
 		}
 		C.Run(env, -1)
@@ -139,7 +146,7 @@ func QueryWsCallback(e *C.Environment, logicalName *C.cchar_t, _ unsafe.Pointer)
 
 //export WriteWsCallback
 func WriteWsCallback(e *C.Environment, logicalName *C.cchar_t, str *C.cchar_t, context unsafe.Pointer) {
-	if err := websockets[C.GoString(logicalName)].WriteMessage(1, []byte(C.GoString(str))); err != nil {
+	if err := websockets[C.GoString(logicalName)].w.WriteMessage(1, []byte(C.GoString(str))); err != nil {
 		log.Printf("WARNING: attempting to send message to socket %s errored: %s", C.GoString(logicalName), err)
 	}
 }
@@ -147,15 +154,19 @@ func WriteWsCallback(e *C.Environment, logicalName *C.cchar_t, str *C.cchar_t, c
 //export ReadWsCallback
 func ReadWsCallback(e *C.Environment, logicalName *C.cchar_t, context unsafe.Pointer) C.int {
 	wsid := C.GoString(logicalName)
-	ch := buffer[0]
-	buffer = buffer[1:]
-	AssertString(e, fmt.Sprintf("(buffer-empty %s %t)", wsid, len(buffer) == 0))
+	websocket := websockets[wsid]
+	if len(websocket.b) == 0 {
+		websocket.b = append(websocket.b, <-websocket.rc...)
+	}
+	ch := websocket.b[0]
+	websocket.b = websocket.b[1:]
 	return C.int(ch)
 }
 
 //export UnreadWsCallback
 func UnreadWsCallback(e *C.Environment, logicalName *C.cchar_t, ch C.int, context unsafe.Pointer) C.int {
-	buffer = append(buffer, byte(ch))
+	wsid := C.GoString(logicalName)
+	websockets[wsid].b = append([]byte{byte(ch)}, websockets[wsid].b...)
 	return C.int(ch)
 }
 
