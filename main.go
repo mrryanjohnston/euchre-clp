@@ -37,7 +37,6 @@ var websocketConnectionsChannel = make(chan []string)
 type Conn struct {
 	b  []byte
 	rc chan []byte
-	wc chan []byte
 	w  *websocket.Conn
 }
 
@@ -73,8 +72,7 @@ func Websocket(w http.ResponseWriter, r *http.Request) {
 
 	websocketId := uuid.NewString()
 	websocketReadChan := make(chan []byte, 1)
-	websocketWriteChan := make(chan []byte)
-	websockets[websocketId] = &Conn{[]byte{}, websocketReadChan, websocketWriteChan, c}
+	websockets[websocketId] = &Conn{[]byte{}, websocketReadChan, c}
 	websocketConnectionsChannel <- []string{sessionId, websocketId}
 	defer WebsocketDisconnection(websocketId)
 
