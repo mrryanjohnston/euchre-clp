@@ -1,0 +1,20 @@
+package main
+
+import "unsafe"
+
+/*
+#cgo CFLAGS: -std=c99 -O3 -fno-strict-aliasing -Wno-unused-result
+#cgo LDFLAGS: -lm
+#include "clips.h"
+typedef const char cchar_t;
+*/
+import "C"
+
+func main() {
+	env := C.CreateEnvironment()
+	defer C.DestroyEnvironment(env)
+	c_f := C.CString("euchre.bat")
+	defer C.free(unsafe.Pointer(c_f))
+	C.BatchStar(env, c_f)
+  C.Run(env, -1)
+}

@@ -48,9 +48,9 @@
 /*                                                                         */
 /***************************************************************************/
 
-//#include "clips.h"
+#include "clips.h"
 
-//void UserFunctions(Environment *);
+void UserFunctions(Environment *);
 
 /*********************************************************/
 /* UserFunctions: Informs the expert system environment  */
@@ -61,7 +61,6 @@
 /*   this function can be deleted from this file and     */
 /*   included in another file.                           */
 /*********************************************************/
-/*
 void UserFunctions(
   Environment *env)
   {
@@ -69,4 +68,3 @@ void UserFunctions(
 #pragma unused(env)
 #endif
   }
-  */
