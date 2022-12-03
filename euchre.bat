@@ -1,7 +1,3 @@
-(println (new-uuid))
-(println (new-uuid))
-(println (new-uuid))
-(println (new-uuid))
 (defrule user-connected
   (connection ?sid ?id)
   =>
@@ -14,13 +10,10 @@
   =>
   (println "User " ?sid " disconnected from connection " ?id))
 
-;(defrule echo
 (defrule received-message
-  ;(received-message-from ?id)
   ?f <- (received-message-from ?id)
   =>
   (retract ?f)
-  ;(println "Received message from " ?id ": " (readline ?id)))
   (println "Received message from " ?id)
   (assert (received-message ?id (readline ?id))))
 
@@ -29,8 +22,9 @@
   =>
   (retract ?f)
   (println "Creating game for user " ?id "...")
-  (assert (game ?id))
-  (format ?id "join %s" ?id))
+  (bind ?gameid (new-uuid))
+  (assert (game ?gameid))
+  (format ?id "join %s" ?gameid))
 
 (defrule list-games
   ?f <- (received-message ?id "list-games")

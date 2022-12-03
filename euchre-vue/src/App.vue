@@ -1,43 +1,51 @@
 <script setup>
+import { ref } from 'vue';
 import { RouterLink, RouterView } from "vue-router";
 import HelloWorld from "./components/HelloWorld.vue";
+import UserCount from "./components/UserCount.vue";
 
 const socket = new WebSocket('ws://localhost:5173/websocket');
+const connected = ref(false);
 
-// Connection opened
-socket.addEventListener('open', (event) => {
-  //socket.send('Hello Server from Vue.js!');
-  socket.send('create-game');
-  socket.send('list-games');
+socket.addEventListener("open", () => {
+  connected.value = true;
 });
-
-// Listen for messages
-socket.addEventListener('message', (event) => {
-  console.log('Message from server to Vue.js:', event.data);
+socket.addEventListener("close", () => {
+  connected.value = false;
+});
+socket.addEventListener("error", () => {
+  connected.value = false;
+});
+const events = {
+  games: new Event('games'),
+};
+socket.addEventListener("message", (event) => {
+  const name = event.data.split(' ').shift();
+  const customEvent = 
+    new CustomEvent(name, {
+      detail: event.data.substring(name.length + 1, event.data.length),
+    });
+  socket.dispatchEvent(customEvent);
 });
 </script>
 
 <template>
   <header>
     <img
-      alt="Vue logo"
+      alt="Euchre Jack"
       class="logo"
-      src="@/assets/logo.svg"
-      width="125"
-      height="125"
+      src="@/assets/euchrejack.png"
+      width="200"
+      height="236"
     />
 
     <div class="wrapper">
-      <HelloWorld msg="You did it!" />
-
-      <nav>
-        <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
-      </nav>
+      <HelloWorld msg="Euchre" />
+      <UserCount :socket="socket" />
     </div>
   </header>
 
-  <RouterView />
+  <RouterView v-if="connected" :socket="socket" />
 </template>
 
 <style scoped>
