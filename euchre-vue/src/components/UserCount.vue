@@ -1,11 +1,7 @@
 <script setup>
-import { ref } from 'vue';
-const { socket } = defineProps({
-  socket: {
-    type: Object,
-    required: true
-  }
-});
+import { inject, ref } from 'vue';
+const connected = inject('connected');
+const socket = inject('socket');
 const users = ref(0);
 socket.addEventListener('users-online', (count) => {
   users.value = count.detail;

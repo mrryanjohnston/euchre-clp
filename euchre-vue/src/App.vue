@@ -1,32 +1,10 @@
 <script setup>
-import { ref } from 'vue';
+import { inject } from 'vue';
 import { RouterLink, RouterView } from "vue-router";
 import HelloWorld from "./components/HelloWorld.vue";
 import UserCount from "./components/UserCount.vue";
+const connected = inject('connected');
 
-const socket = new WebSocket('ws://localhost:5173/websocket');
-const connected = ref(false);
-
-socket.addEventListener("open", () => {
-  connected.value = true;
-});
-socket.addEventListener("close", () => {
-  connected.value = false;
-});
-socket.addEventListener("error", () => {
-  connected.value = false;
-});
-const events = {
-  games: new Event('games'),
-};
-socket.addEventListener("message", (event) => {
-  const name = event.data.split(' ').shift();
-  const customEvent = 
-    new CustomEvent(name, {
-      detail: event.data.substring(name.length + 1, event.data.length),
-    });
-  socket.dispatchEvent(customEvent);
-});
 </script>
 
 <template>
@@ -41,11 +19,11 @@ socket.addEventListener("message", (event) => {
 
     <div class="wrapper">
       <HelloWorld msg="Euchre" />
-      <UserCount :socket="socket" />
+      <UserCount />
     </div>
   </header>
 
-  <RouterView v-if="connected" :socket="socket" />
+  <RouterView v-if="connected" />
 </template>
 
 <style scoped>

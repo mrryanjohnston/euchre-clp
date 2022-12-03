@@ -1,13 +1,8 @@
 <script setup>
-import { ref } from 'vue';
+import { inject, ref } from 'vue';
 
-const { socket } = defineProps({
-  socket: {
-    type: Object,
-    required: true
-  }
-});
 const games = ref([]);
+const socket = inject('socket');
 socket.addEventListener('games', (g) => {
   games.value = g.detail.split(' ');
 });
